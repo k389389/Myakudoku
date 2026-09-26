@@ -274,7 +274,8 @@ button{cursor:pointer}
   <div class="card resultCard">
     <h2>🎉 RESULT</h2>
     <div id="resultList"></div>
-    <button class="btn gold" id="againBtn" style="margin-top:15px;width:100%">次の問題</button>
+    <div id="resultNextInfo" class="notice" style="margin-top:15px;font-size:15px;font-weight:900">結果を5秒表示 → 3カウント → 次のラウンド開始<br><span style="font-size:13px;font-weight:700">5秒後、次のラウンドが始まります。</span></div>
+    <button class="btn gold" id="againBtn" style="display:none">次の問題</button>
   </div>
 </div>
 
@@ -443,7 +444,7 @@ let started=false,startAt=0,raf=0,gameOver=false,penaltyPoints=0;
 let totalRounds=3,currentRound=1,roundFinished=false;
 let participants={}, chatSeen={}, selectedWatchUid=null, countdownTimer=null, firebaseUnsubs=[];
 let localPlayer=null, localStartAt=0, autoAdvanceTimer=null, roundFinalizeInProgress=false;
-let audioCtx=null, lastGamePhase=null, lastResultSoundPhase=null;
+let audioCtx=null, lastGamePhase=null, lastResultSoundPhase=null, resultAdvanceTimer=null;
 
 const $=id=>document.getElementById(id);
 const boardEl=$("board");
@@ -525,7 +526,7 @@ async function submitClear(){
   const score=Math.max(0,500-Math.floor(elapsed/1000)-penaltyPoints);
   showClearEffect(name||"プレイヤー");
   playClearSound();
-  await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"CLEAR",clearAt:serverTimestamp(),timeMs:elapsed,score,board:encodeBoard()}).catch(()=>{});
+  await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"CLEAR",clearAt:serverTimestamp(),clearRound:currentRound,timeMs:elapsed,score,board:encodeBoard()}).catch(()=>{});
   started=false;cancelAnimationFrame(raf);$('status').textContent="クリア！";
 }
 function renderPlayers(){const arr=Object.values(participants).filter(Boolean);const box=$("players");box.innerHTML="";arr.filter(p=>p.mode==="play").sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(p=>{const row=document.createElement("div");row.className="player";const left=document.createElement("span");left.innerHTML=`<span class="dot" style="background:${p.color||"#35c9ff"}"></span>${escapeHtml(p.name)}`;const right=document.createElement("span");right.className="small";right.textContent=p.status==="CLEAR"?`CLEAR! ${format(p.timeMs||0)} / ${p.score||0}点`:p.status==="PLAYING"?"プレイ中":"待機";row.append(left,right);box.appendChild(row)});const sel=$("watchSelect");if(sel){sel.innerHTML="";arr.filter(p=>p.mode==="play").forEach(p=>{const o=document.createElement("option");o.value=p.uid;o.textContent=p.name;sel.appendChild(o)});if(!selectedWatchUid&&sel.value)selectedWatchUid=sel.value;const wp=participants[selectedWatchUid];if(mode==="watch"&&wp?.board){decodeBoard(wp.board);render()}}}
@@ -546,6 +547,7 @@ function setupChat(){
 }
 function selectRounds(n){totalRounds=n;document.querySelectorAll(".roundBtn").forEach(b=>b.classList.toggle("selected",Number(b.dataset.round)===n));$("roundInfo").textContent=`現在：${n}R`;if(dbReady())update(ref(db(),`rooms/${ROOM_ID}/game`),{totalRounds:n}).catch(()=>{})}
 async function registerPlayer(){
+  try{sessionStorage.removeItem("expo_waiting")}catch(e){}
   if(!dbReady()) return false;
   name=$("nameInput").value.trim()||"プレイヤー";
   const playerRef=ref(db(),`rooms/${ROOM_ID}/players/${uid()}`);
@@ -558,6 +560,7 @@ async function registerPlayer(){
   return true;
 }
 async function registerSpectator(){
+  try{sessionStorage.removeItem("expo_waiting")}catch(e){}
   if(!dbReady()) return false;
   name=$("nameInput").value.trim()||"観覧者";
   const playerRef=ref(db(),`rooms/${ROOM_ID}/players/${uid()}`);
@@ -578,32 +581,52 @@ function startCountdown(){
     }
   },100)
 }
-function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";lastGamePhase=phase;if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";startCountdown();return}if(phase==="PLAYING"){if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});return}if(phase==="FINAL"){started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
+function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";lastGamePhase=phase;if(phase!=="WAITING"&&(()=>{try{return sessionStorage.getItem("expo_waiting")==="1"}catch(e){return false}})()){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);$("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";return}if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){clearTimeout(resultAdvanceTimer);penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";$("result").style.display="none";startCountdown();return}if(phase==="PLAYING"){clearTimeout(resultAdvanceTimer);if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});scheduleNextRound(g);return}if(phase==="FINAL"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
 function showRoundResult(result){
   const resultList=$("resultList");
-  resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.points}点 / ${format(x.timeMs||0)}</span></div>`).join("");
+  resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.score||0}点（+${x.points||0}）</span></div>`).join("");
   $("result").style.display="flex";
-  $("againBtn").textContent=currentRound<totalRounds?"次の問題へ":"最終結果を見る";
+  $("againBtn").style.display="none";
   if(lastResultSoundPhase!=="ROUND_RESULT"){playResultSound();lastResultSoundPhase="ROUND_RESULT";}
 }
-function showFinalResults(totals){if(lastResultSoundPhase!=="FINAL"){playResultSound();lastResultSoundPhase="FINAL";}const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="ゲーム画面に戻る"}
+function scheduleNextRound(g){
+  clearTimeout(resultAdvanceTimer);
+  if(g?.phase!=="ROUND_RESULT"||currentRound>=totalRounds||!g.resultAt)return;
+  const resultAt=Number(g.resultAt);
+  const wait=Math.max(0,resultAt+5000-Date.now());
+  resultAdvanceTimer=setTimeout(async()=>{
+    await startNextRoundOnline();
+  },wait);
+}
+function showFinalResults(totals){if(lastResultSoundPhase!=="FINAL"){playResultSound();lastResultSoundPhase="FINAL";}const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').style.display="none";$('resultNextInfo').innerHTML="最終結果です。"}
 async function finalizeRound(force=false){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
   roundFinalizeInProgress=true;
   let autoAdvance=false;
   try{
     const play=Object.values(participants).filter(p=>p.mode==="play");
-    const cleared=play.filter(p=>p.status==="CLEAR").sort((a,b)=>(a.clearAt||Infinity)-(b.clearAt||Infinity)).slice(0,3);
+    // 順位はクリア時刻ではなく、ラウンド終了時のスコアが高い順で決定
+    // 同点時もタイムでは決めず、UIDで固定して端末間の順位を一致させる
+    const cleared=play.filter(p=>p.status==="CLEAR").sort((a,b)=>{
+      const sa=Number(a.score||0), sb=Number(b.score||0);
+      if(sb!==sa)return sb-sa;
+      return String(a.uid||"").localeCompare(String(b.uid||""));
+    }).slice(0,3);
     const result={},totals={};
     play.forEach(p=>totals[p.uid]={name:p.name,points:p.roundPoints||0});
-    cleared.forEach((p,i)=>{const pts=[3,2,1][i]||0;result[p.uid]={name:p.name,rank:i+1,points:pts,timeMs:p.timeMs||0};totals[p.uid]={name:p.name,points:(p.roundPoints||0)+pts};})
+    cleared.forEach((p,i)=>{
+      const pts=[3,2,1][i]||0;
+      result[p.uid]={name:p.name,rank:i+1,points:pts,score:Number(p.score||0),timeMs:p.timeMs||0};
+      totals[p.uid]={name:p.name,points:(p.roundPoints||0)+pts};
+    });
     autoAdvance=false;
     const updates={};
     updates[`rooms/${ROOM_ID}/game/phase`]=currentRound>=totalRounds?"FINAL":"ROUND_RESULT";
     updates[`rooms/${ROOM_ID}/game/result`]=result;
     updates[`rooms/${ROOM_ID}/game/totals`]=totals;
     updates[`rooms/${ROOM_ID}/game/forced`]=force;
+    if(currentRound<totalRounds)updates[`rooms/${ROOM_ID}/game/resultAt`]=serverTimestamp();
     for(const p of play){const add=result[p.uid]?.points||0;updates[`rooms/${ROOM_ID}/players/${p.uid}/roundPoints`]=(p.roundPoints||0)+add;}
     await update(ref(db()),updates);
     roundFinished=true;
@@ -618,7 +641,7 @@ async function finalizeRound(force=false){
 async function watchClearCount(){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
   const play=Object.values(participants).filter(p=>p.mode==="play");
-  const cleared=play.filter(p=>p.status==="CLEAR").length;
+  const cleared=play.filter(p=>p.status==="CLEAR"&&Number(p.clearRound||0)===Number(currentRound)).length;
   const need=play.length<=2?1:3;
   if(play.length>0&&cleared>=Math.min(need,play.length))await finalizeRound(false);
 }
@@ -631,9 +654,10 @@ async function startGameOnline(){
     updates[`rooms/${ROOM_ID}/players/${p.uid}/timeMs`]=0;
     updates[`rooms/${ROOM_ID}/players/${p.uid}/score`]=0;
     updates[`rooms/${ROOM_ID}/players/${p.uid}/clearAt`]=null;
+    updates[`rooms/${ROOM_ID}/players/${p.uid}/clearRound`]=null;
     updates[`rooms/${ROOM_ID}/players/${p.uid}/board`]=".".repeat(100);
   }
-  updates[`rooms/${ROOM_ID}/game`]={phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,forced:false};
+  updates[`rooms/${ROOM_ID}/game`]={phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,resultAt:null,forced:false};
   roundFinished=false; gameOver=false;
   await update(ref(db()),updates).catch(()=>{});
 }
@@ -648,9 +672,22 @@ async function startNextRoundOnline(){
       const sol=makeSolution(),reg=makeRegions(sol);
       return {phase:"COUNTDOWN",round:next,totalRounds:current.totalRounds||totalRounds,
         puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,
-        result:null,totals:null,forced:false};
+        result:null,totals:null,resultAt:null,forced:false};
     });
-    if(tx.committed){roundFinished=false;gameOver=false;roundFinalizeInProgress=false}
+    if(tx.committed){
+      const players=Object.values(participants).filter(p=>p.mode==="play");
+      const reset={};
+      for(const p of players){
+        reset[`rooms/${ROOM_ID}/players/${p.uid}/status`]="WAITING";
+        reset[`rooms/${ROOM_ID}/players/${p.uid}/timeMs`]=0;
+        reset[`rooms/${ROOM_ID}/players/${p.uid}/score`]=0;
+        reset[`rooms/${ROOM_ID}/players/${p.uid}/clearAt`]=null;
+        reset[`rooms/${ROOM_ID}/players/${p.uid}/clearRound`]=null;
+        reset[`rooms/${ROOM_ID}/players/${p.uid}/board`]=".".repeat(100);
+      }
+      if(Object.keys(reset).length)await update(ref(db()),reset).catch(()=>{});
+      roundFinished=false;gameOver=false;roundFinalizeInProgress=false
+    }
   }catch(e){console.error("next round transition error",e)}
 }
 async function restartWholeGame(){
@@ -665,13 +702,14 @@ async function restartWholeGame(){
     updates[`rooms/${ROOM_ID}/players/${p.uid}/roundPoints`]=0;
     updates[`rooms/${ROOM_ID}/players/${p.uid}/board`]=".".repeat(100);
   }
-  updates[`rooms/${ROOM_ID}/game`]={phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,forced:false};
+  updates[`rooms/${ROOM_ID}/game`]={phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,resultAt:null,forced:false};
   roundFinished=false;gameOver=false;await update(ref(db()),updates).catch(()=>{});
 }
 async function returnToWaiting(){
   if(!dbReady())return;
+  try{sessionStorage.setItem("expo_waiting","1")}catch(e){}
   clearTimeout(autoAdvanceTimer);roundFinalizeInProgress=false;started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
-  if(mode==="play")await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"WAITING",board:".".repeat(100),timeMs:0,score:0,clearAt:null}).catch(()=>{});
+  if(mode==="play")await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"WAITING",board:".".repeat(100),timeMs:0,score:0,clearAt:null,clearRound:null}).catch(()=>{});
   $("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";
 }
 async function forceNextRound(){if(!dbReady()||!started||roundFinished)return;await finalizeRound(true)}
@@ -700,7 +738,7 @@ $("clearMyakBtn")?.addEventListener("click",clearAllMyak);
 $("backWaitingBtn")?.addEventListener("click",()=>{
   if(confirm("待機画面に戻ります。現在のゲーム進行は終了します。よろしいですか？"))returnToWaiting();
 });
-$("againBtn").onclick=async()=>{if(gameOver){$("result").style.display="none";$("startScreen").style.display="none";$("status").textContent="ゲーム終了";return}$("result").style.display="none";await startNextRoundOnline();};
+$("againBtn").onclick=()=>{};
 $("watchSelect")?.addEventListener("change",e=>{selectedWatchUid=e.target.value;const p=participants[selectedWatchUid];if(p?.board){decodeBoard(p.board);render()}});
 setupChat();
 window.addEventListener("firebase-ready",()=>{subscribeFirebase();});
