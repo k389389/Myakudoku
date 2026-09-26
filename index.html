@@ -256,28 +256,66 @@ button{cursor:pointer}
 
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-  import { getAnalytics, isSupported as analyticsSupported } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-analytics.js";
-  import { getDatabase, ref, set, update, push, onValue, onDisconnect, serverTimestamp, get, runTransaction } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+(async()=>{
+  try {
+    // Firebase公式CDNのブラウザモジュールを動的に読み込み、
+    // 読み込み自体に失敗した場合も画面にエラーを出せるようにする。
+    const [appMod, dbMod, authMod] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js"),
+      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js")
+    ]);
+    const { initializeApp } = appMod;
+    const { getDatabase, ref, set, update, push, onValue, onDisconnect, serverTimestamp, get, runTransaction } = dbMod;
+    const { getAuth, signInAnonymously, onAuthStateChanged } = authMod;
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBuqwk4hd8lNfrR7_XXYfI3fzySswnG1XA",
-    authDomain: "myakudoku.firebaseapp.com",
-    databaseURL: "https://myakudoku-default-rtdb.firebaseio.com",
-    projectId: "myakudoku",
-    storageBucket: "myakudoku.firebasestorage.app",
-    messagingSenderId: "123159231588",
-    appId: "1:123159231588:web:cae596c8ba3b8c9e407371",
-    measurementId: "G-HT1LM4Q53C"
-  };
-  const app=initializeApp(firebaseConfig);
-  const db=getDatabase(app);
-  const auth=getAuth(app);
-  window.myakudokuFirebase={app,db,auth,ref,set,update,push,onValue,onDisconnect,serverTimestamp,get,runTransaction};
-  try{ if(await analyticsSupported()) window.myakudokuFirebase.analytics=getAnalytics(app); }catch(e){ console.warn(e); }
-  onAuthStateChanged(auth,user=>{ if(user){ window.myakudokuFirebase.uid=user.uid; window.dispatchEvent(new Event("firebase-ready")); }});
-  signInAnonymously(auth).catch(e=>{ console.error("Firebase anonymous auth failed",e); window.dispatchEvent(new CustomEvent("firebase-error",{detail:e})); });
+    const firebaseConfig = {
+      apiKey: "AIzaSyBuqwk4hd8lNfrR7_XXYfI3fzySswnG1XA",
+      authDomain: "myakudoku.firebaseapp.com",
+      databaseURL: "https://myakudoku-default-rtdb.firebaseio.com",
+      projectId: "myakudoku",
+      storageBucket: "myakudoku.firebasestorage.app",
+      messagingSenderId: "123159231588",
+      appId: "1:123159231588:web:cae596c8ba3b8c9e407371"
+    };
+
+    const app=initializeApp(firebaseConfig);
+    const db=getDatabase(app);
+    const auth=getAuth(app);
+    window.myakudokuFirebase={app,db,auth,ref,set,update,push,onValue,onDisconnect,serverTimestamp,get,runTransaction};
+
+    let firebaseReadyFired=false;
+    const firebaseReady=()=>{
+      if(firebaseReadyFired || !window.myakudokuFirebase.uid) return;
+      firebaseReadyFired=true;
+      window.dispatchEvent(new Event("firebase-ready"));
+    };
+
+    onAuthStateChanged(auth,user=>{
+      if(user){
+        window.myakudokuFirebase.uid=user.uid;
+        firebaseReady();
+      }
+    });
+
+    signInAnonymously(auth).catch(e=>{
+      console.error("Firebase anonymous auth failed",e);
+      window.dispatchEvent(new CustomEvent("firebase-error",{detail:e}));
+    });
+
+    setTimeout(()=>{
+      if(!firebaseReadyFired){
+        const e=new Error("Firebase匿名認証の応答がありません。ネットワーク、Authentication、承認済みドメインを確認してください。");
+        e.code="auth-timeout";
+        window.dispatchEvent(new CustomEvent("firebase-error",{detail:e}));
+      }
+    },10000);
+  } catch(e) {
+    console.error("Firebase SDK load/init failed", e);
+    e.code = e.code || "firebase-sdk-load-error";
+    window.dispatchEvent(new CustomEvent("firebase-error",{detail:e}));
+  }
+})();
 </script>
 
 <script>
@@ -419,7 +457,12 @@ $("againBtn").onclick=async()=>{if(gameOver){$("result").style.display="none";$(
 $("watchSelect")?.addEventListener("change",e=>{selectedWatchUid=e.target.value;const p=participants[selectedWatchUid];if(p?.board){decodeBoard(p.board);render()}});
 setupChat();
 window.addEventListener("firebase-ready",()=>{subscribeFirebase();});
-window.addEventListener("firebase-error",()=>{$("entryPlayers").textContent="Firebaseに接続できませんでした。Firebase Authentication（匿名）を有効にしてください。"});
+window.addEventListener("firebase-error",e=>{
+  const err=e.detail||{};
+  console.error("Firebase connection error",err);
+  const code=err.code||"unknown";
+  $("entryPlayers").textContent=`Firebase接続エラー（${code}）。ページを再読み込みしてください。`;
+});
 </script>
 </body>
 </html>
