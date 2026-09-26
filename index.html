@@ -81,20 +81,22 @@ button{cursor:pointer}
 .entryChat{margin-top:14px;text-align:left}
 .entryChat .chatBox{background:#fff}
 .entryChatTitle{font-size:12px;font-weight:900;color:#55708a;margin-bottom:5px}
-.boardWrap{position:relative}
-.chatFloatWrap{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:20}
+.chatFloatWrap{position:relative;height:72px;margin:0 0 6px;overflow:hidden;pointer-events:none}
 .chatFloat{position:absolute;inset:0;overflow:hidden;pointer-events:none}
-.chatBubble{position:absolute;left:10px;bottom:-12px;max-width:calc(100% - 20px);padding:7px 12px;border-radius:16px;background:#fff;color:#17283b;font-weight:800;font-size:13px;box-shadow:0 3px 10px #0006;animation:chatFloatUp 4s linear forwards}
+.chatBubble{position:absolute;left:10px;bottom:-10px;max-width:calc(100% - 20px);padding:7px 12px;border-radius:16px;background:#fff;color:#17283b;font-weight:800;font-size:13px;box-shadow:0 3px 10px #0004;animation:chatFloatUp 4s ease-out forwards}
 .chatBubble::before{content:"";position:absolute;left:14px;bottom:-5px;width:10px;height:10px;background:#fff;transform:rotate(45deg)}
 @keyframes chatFloatUp{
   0%{transform:translateY(0);opacity:0}
   8%{opacity:1}
-  82%{opacity:1}
-  100%{transform:translateY(var(--floatY,-700px));opacity:0}
+  75%{opacity:1}
+  100%{transform:translateY(-82px);opacity:0}
 }
 .confirmBox{margin-top:12px;padding:12px;border-radius:12px;background:#102d4d;border:1px solid #46749a}
 .confirmBox strong{display:block;margin-bottom:8px;color:#ffd52e}
 .confirmActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:800px){
+  .chatFloatWrap{height:68px}
+}
 
 
 .roundSelect{margin:12px 0;padding:12px;border:1px solid #315372;border-radius:12px;background:#102d4d}
@@ -267,9 +269,9 @@ button{cursor:pointer}
     <section class="card boardCard">
       <div class="boardWrap">
         <div id="board" class="board"></div>
-        <div class="chatFloatWrap">
-          <div id="chatFloat" class="chatFloat"></div>
-        </div>
+      </div>
+      <div class="chatFloatWrap">
+        <div id="chatFloat" class="chatFloat"></div>
       </div>
     </section>
 
@@ -484,17 +486,7 @@ async function submitClear(){
 function renderPlayers(){const arr=Object.values(participants).filter(Boolean);const box=$("players");box.innerHTML="";arr.filter(p=>p.mode==="play").sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(p=>{const row=document.createElement("div");row.className="player";const left=document.createElement("span");left.innerHTML=`<span class="dot" style="background:${p.color||"#35c9ff"}"></span>${escapeHtml(p.name)}`;const right=document.createElement("span");right.className="small";right.textContent=p.status==="CLEAR"?`CLEAR! ${format(p.timeMs||0)} / ${p.score||0}点`:p.status==="PLAYING"?"プレイ中":"待機";row.append(left,right);box.appendChild(row)});const sel=$("watchSelect");if(sel){sel.innerHTML="";arr.filter(p=>p.mode==="play").forEach(p=>{const o=document.createElement("option");o.value=p.uid;o.textContent=p.name;sel.appendChild(o)});if(!selectedWatchUid&&sel.value)selectedWatchUid=sel.value;const wp=participants[selectedWatchUid];if(mode==="watch"&&wp?.board){decodeBoard(wp.board);render()}}}
 function renderEntryPlayers(){const el=$("entryPlayers");if(!el)return;const ps=Object.values(participants);const pl=ps.filter(p=>p.mode==="play");const wa=ps.filter(p=>p.mode==="watch");el.innerHTML=`<div>🟢 プレイヤー：${pl.length}人</div>`+(pl.length?pl.map(p=>`<div style="padding-left:10px">・${escapeHtml(p.name)}</div>`).join(""):"")+`<div style="margin-top:4px">👀 観覧：${wa.length}人</div>`}
 function renderEntryChat(msg){const log=$("entryChatLog");if(!log)return;const line=document.createElement("div");line.style.margin="3px 0";line.innerHTML=`<b>${escapeHtml(msg.name)}：</b>${escapeHtml(msg.text)}`;log.appendChild(line);log.scrollTop=log.scrollHeight}
-function renderFloatChat(msg){
-  const wrap=$("chatFloat");
-  if(!wrap)return;
-  const bubble=document.createElement("div");
-  bubble.className="chatBubble";
-  bubble.textContent=`${msg.name}：${msg.text}`;
-  bubble.style.left=(10+Math.floor(Math.random()*35))+"px";
-  bubble.style.setProperty("--floatY",`-${wrap.clientHeight+90}px`);
-  wrap.appendChild(bubble);
-  setTimeout(()=>bubble.remove(),4100);
-}
+function renderFloatChat(msg){const wrap=$("chatFloat");if(!wrap)return;const bubble=document.createElement("div");bubble.className="chatBubble";bubble.textContent=`${msg.name}：${msg.text}`;bubble.style.left=(10+Math.floor(Math.random()*35))+"px";wrap.appendChild(bubble);setTimeout(()=>bubble.remove(),4100)}
 function sendChatLocal(message){const text=String(message||"").trim();if(!text||!dbReady())return;push(ref(db(),`rooms/${ROOM_ID}/chat`),{name:name||"プレイヤー",uid:uid(),text:text,createdAt:serverTimestamp()}).catch(()=>{})}
 function setupChat(){
   const send=id=>{const i=$(id);if(i&&i.value.trim()){sendChatLocal(i.value.trim());i.value=""}};
