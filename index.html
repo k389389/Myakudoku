@@ -23,8 +23,8 @@ button{cursor:pointer}
 .card{background:linear-gradient(180deg,#173f68,#0d2948);border:2px solid #35658e;border-radius:16px;box-shadow:0 10px 30px #0006}
 .boardCard{padding:10px}
 .boardWrap{width:min(88vw,720px);margin:auto}
-.board{display:grid;grid-template-columns:repeat(10,1fr);aspect-ratio:1/1;border:2px solid #071427;background:#071427;touch-action:manipulation}
-.cell{position:relative;border:1px solid #111827;display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;user-select:none}
+.board{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(10,minmax(0,1fr));width:100%;height:100%;aspect-ratio:1/1;border:2px solid #071427;background:#071427;touch-action:manipulation}
+.cell{position:relative;border:1px solid #111827;display:flex;width:100%;height:100%;min-width:0;min-height:0;align-items:center;justify-content:center;min-width:0;overflow:hidden;user-select:none}
 .cell:hover{filter:brightness(1.07)}
 .cell.seed{box-shadow:inset 0 0 0 3px #fff8}
 .cell.selected{outline:4px solid #fff;outline-offset:-5px;z-index:2}
@@ -111,8 +111,16 @@ button{cursor:pointer}
 
     <aside class="card side">
       <div class="scoreBox">
-        <div class="small">TIME</div>
-        <div id="time" class="time">00:00.00</div>
+        <div style="display:flex;gap:10px;justify-content:center;align-items:flex-end">
+          <div style="flex:1">
+            <div class="small">TIME</div>
+            <div id="time" class="time">00:00.00</div>
+          </div>
+          <div style="flex:1">
+            <div class="small">SCORE</div>
+            <div id="score" class="time">500</div>
+          </div>
+        </div>
         <div id="status" class="small">スタート待ち</div>
       </div>
 
@@ -122,7 +130,7 @@ button{cursor:pointer}
       </div>
 
       <div class="actions">
-        <button id="flagBtn" class="btn dark">🚩 旗モード</button>
+        <button id="modeBtn" class="btn dark">配置：ミャクミャク</button>
         <button id="checkBtn" class="btn gold">判定</button>
       </div>
 
@@ -139,7 +147,7 @@ button{cursor:pointer}
         ・各色エリアにミャクミャクを1体ずつ<br>
         ・同じ行・列には重ねない<br>
         ・周囲8マス（斜めを含む）には置かない<br>
-        ・置けないマスには旗を置いて整理できます
+        ・マスを押すたびに「ミャクミャク→旗→空白」と切り替わります<br>・置いてはいけないマスをタップすると−5点<br>・スコアは1秒ごとに1点減ります
       </div>
     </aside>
   </div>
@@ -153,7 +161,7 @@ const XMARK = "data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHR
 const N=10;
 const palette=["#fff477","#6cf06c","#69e5d0","#69d7ef","#6d8ff0","#a06df0","#d76df0","#ff6fb4","#ffd080","#ff7777"];
 let name="", mode="play", board=[], solution=[], placed=[], flags=[], regions=[];
-let started=false, startAt=0, raf=0, gameOver=false, flagMode=false;
+let started=false, startAt=0, raf=0, gameOver=false, penaltyPoints=0;
 let participants=[];
 
 const $=id=>document.getElementById(id);
@@ -239,6 +247,16 @@ function isComplete(){
   for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(placed[r][c])count++;
   return count===N;
 }
+function pieceFilter(region){
+  const filters=[
+    "hue-rotate(45deg) saturate(1.25)","hue-rotate(105deg) saturate(1.25)",
+    "hue-rotate(155deg) saturate(1.15)","hue-rotate(195deg) saturate(1.2)",
+    "hue-rotate(225deg) saturate(1.15)","hue-rotate(265deg) saturate(1.2)",
+    "hue-rotate(300deg) saturate(1.2)","hue-rotate(335deg) saturate(1.2)",
+    "hue-rotate(15deg) saturate(1.2)","hue-rotate(355deg) saturate(1.2)"
+  ];
+  return filters[region%filters.length];
+}
 function render(){
   boardEl.innerHTML="";
   for(let r=0;r<N;r++) for(let c=0;c<N;c++){
@@ -247,9 +265,11 @@ function render(){
     el.style.background=palette[regions[r][c]];
     el.dataset.r=r;el.dataset.c=c;
     if(placed[r][c]){
-      const img=new Image();img.className="icon";img.src=MYAK;el.appendChild(img);
+      const img=new Image();img.className="icon";img.src=MYAK;
+      img.style.filter=pieceFilter(regions[r][c]);el.appendChild(img);
     }else if(flags[r][c]){
-      const img=new Image();img.className="flag";img.src=FLAG;el.appendChild(img);
+      const img=new Image();img.className="flag";img.src=FLAG;
+      img.style.filter=pieceFilter(regions[r][c]);el.appendChild(img);
     }
     if(solution[r]===c && placed[r][c]) el.classList.add("seed");
     el.addEventListener("click",()=>tapCell(r,c,el));
@@ -257,22 +277,26 @@ function render(){
   }
 }
 function tapCell(r,c,el){
-  if(mode==="watch") return;
-  if(!started||gameOver) return;
-  if(placed[r][c]){
-    placed[r][c]=false; render(); return;
+  if(mode==="watch"||!started||gameOver) return;
+
+  if(!placed[r][c] && !flags[r][c]){
+    if(!canPlace(r,c)){
+      penaltyPoints += 5;
+      $("score").textContent=String(500-Math.floor((performance.now()-startAt)/1000)-penaltyPoints);
+      el.classList.add("invalid");
+      $("message").textContent="⚠️ そのマスは置けません。−5点";
+      setTimeout(()=>el.classList.remove("invalid"),450);
+      return;
+    }
+    placed[r][c]=true; flags[r][c]=false;
+    $("message").textContent="ミャクミャクを配置しました";
+  }else if(placed[r][c]){
+    placed[r][c]=false; flags[r][c]=true;
+    $("message").textContent="旗に変更しました";
+  }else{
+    flags[r][c]=false; placed[r][c]=false;
+    $("message").textContent="空白に戻しました";
   }
-  if(flagMode){
-    flags[r][c]=!flags[r][c]; render(); return;
-  }
-  if(!canPlace(r,c)){
-    el.classList.add("invalid");
-    $("message").textContent="⚠️ そのマスはルール上置けません";
-    setTimeout(()=>el.classList.remove("invalid"),450);
-    return;
-  }
-  flags[r][c]=false;
-  placed[r][c]=true;
   render();
   if(isComplete()) finish();
 }
@@ -282,7 +306,10 @@ function format(ms){
 }
 function tick(){
   if(!started||gameOver)return;
-  $("time").textContent=format(performance.now()-startAt);
+  const elapsed=performance.now()-startAt;
+  $("time").textContent=format(elapsed);
+  const wholeSeconds=Math.floor(elapsed/1000);
+  $("score").textContent=String(500-wholeSeconds-penaltyPoints);
   raf=requestAnimationFrame(tick);
 }
 function finish(){
@@ -291,7 +318,7 @@ function finish(){
   $("status").textContent="CLEAR!";
   $("message").textContent=`🎉 ${name}さん、クリア！ ${format(t)}`;
   const me=participants.find(p=>p.name===name);
-  if(me){me.status="CLEAR!";me.time=t}
+  if(me){me.status="CLEAR!";me.time=t;me.score=Math.floor(500-Math.floor(t/1000)-penaltyPoints)}
   renderPlayers();
   setTimeout(showResult,350);
 }
@@ -302,7 +329,7 @@ function renderPlayers(){
     const left=document.createElement("span");
     left.innerHTML=`<span class="dot" style="background:${p.color}"></span>${escapeHtml(p.name)}`;
     const right=document.createElement("span");right.className="small";
-    right.textContent=p.status==="CLEAR!" ? `CLEAR! ${format(p.time||0)}` : p.status;
+    right.textContent=p.status==="CLEAR!" ? `CLEAR! ${format(p.time||0)} / ${p.score??""}点` : p.status;
     row.append(left,right);box.appendChild(row);
   });
   const sel=$("watchSelect");sel.innerHTML="";
@@ -311,7 +338,7 @@ function renderPlayers(){
 function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function showResult(){
   const sorted=[...participants].filter(p=>p.time).sort((a,b)=>a.time-b.time);
-  $("resultList").innerHTML=sorted.length ? sorted.map((p,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(p.name)}</b><span>${format(p.time)}</span></div>`).join("") : "";
+  $("resultList").innerHTML=sorted.length ? sorted.map((p,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(p.name)}</b><span>${format(p.time)} / ${p.score??""}点</span></div>`).join("") : "";
   $("result").style.display="flex";
 }
 async function startGame(){
@@ -327,6 +354,7 @@ async function startGame(){
     {name:"ぴよまま",color:"#c084fc",status:"プレイ中"}
   ];
   newPuzzle();
+  penaltyPoints=0; $("score").textContent="500";
   renderPlayers();
   if(mode==="watch"){
     started=false; gameOver=false;
@@ -347,7 +375,9 @@ document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",()=>
   document.querySelectorAll(".modeBtn").forEach(x=>{if(!x.classList.contains("active"))x.classList.add("dark")});
 }));
 $("startBtn").onclick=startGame;
-$("flagBtn").onclick=()=>{flagMode=!flagMode;$("flagBtn").textContent=flagMode?"🚩 旗モードON":"🚩 旗モード";$("message").textContent=flagMode?"置けないと思うマスを旗で整理できます":"ミャクミャク配置モードです"};
+$("modeBtn").onclick=()=>{
+  $("message").textContent="マスを押すたびに「ミャクミャク→旗→空白」と切り替わります";
+};
 $("checkBtn").onclick=()=>{
   if(mode==="watch")return;
   if(!started||gameOver)return;
