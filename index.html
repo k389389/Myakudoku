@@ -443,6 +443,7 @@ let started=false,startAt=0,raf=0,gameOver=false,penaltyPoints=0;
 let totalRounds=3,currentRound=1,roundFinished=false;
 let participants={}, chatSeen={}, selectedWatchUid=null, countdownTimer=null, firebaseUnsubs=[];
 let localPlayer=null, localStartAt=0, autoAdvanceTimer=null, roundFinalizeInProgress=false;
+let audioCtx=null, lastGamePhase=null, lastResultSoundPhase=null;
 
 const $=id=>document.getElementById(id);
 const boardEl=$("board");
@@ -461,6 +462,33 @@ function encodeBoard(){let s="";for(let r=0;r<N;r++)for(let c=0;c<N;c++)s+=place
 function decodeBoard(s){placed=Array.from({length:N},()=>Array(N).fill(false));flags=Array.from({length:N},()=>Array(N).fill(false));for(let i=0;i<N*N;i++){const r=Math.floor(i/N),c=i%N;if(s?.[i]==="M")placed[r][c]=true;if(s?.[i]==="F")flags[r][c]=true}}
 function countPlaced(){return placed.flat().filter(Boolean).length}
 function tapCell(r,c,el){if(mode!=="play"||!started||roundFinished||gameOver)return;if(!placed[r][c]&&!flags[r][c]){if(!canPlace(r,c)){penaltyPoints+=5;updateScore();el.classList.add("invalid");setTimeout(()=>el.classList.remove("invalid"),450);sendChatLocal("⚠️ 置けないマス −5点");return}placed[r][c]=true;flags[r][c]=false}else if(placed[r][c]){placed[r][c]=false;flags[r][c]=true}else{flags[r][c]=false;placed[r][c]=false}render();saveMyBoard();if(isComplete())submitClear()}
+function ensureAudio(){
+  try{
+    if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+    return audioCtx;
+  }catch(e){return null}
+}
+function playTone(freq,duration=0.12,type='sine',volume=0.045,delay=0){
+  const ctx=ensureAudio(); if(!ctx)return;
+  const t=ctx.currentTime+delay;
+  const o=ctx.createOscillator(), g=ctx.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(volume,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+duration);
+  o.connect(g).connect(ctx.destination); o.start(t); o.stop(t+duration+0.02);
+}
+function playCountdownSound(n){
+  if(n===3)playTone(440,.10,'sine',.035);
+  else if(n===2)playTone(554,.10,'sine',.04);
+  else if(n===1)playTone(659,.14,'sine',.045);
+  else {playTone(784,.18,'triangle',.05);playTone(1047,.22,'triangle',.04,.09)}
+}
+function playClearSound(){playTone(659,.12,'triangle',.045);playTone(784,.12,'triangle',.05,.09);playTone(1047,.28,'triangle',.055,.18)}
+function playResultSound(){playTone(523,.12,'sine',.045);playTone(659,.12,'sine',.045,.10);playTone(784,.25,'triangle',.05,.20)}
+document.addEventListener('pointerdown',()=>ensureAudio(),{once:false,passive:true});
+
 function showClearEffect(playerName){
   const fx=$("clearFx");
   const sub=$("clearFxSub");
@@ -496,6 +524,7 @@ async function submitClear(){
   const elapsed=Date.now()-localStartAt;
   const score=Math.max(0,500-Math.floor(elapsed/1000)-penaltyPoints);
   showClearEffect(name||"プレイヤー");
+  playClearSound();
   await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"CLEAR",clearAt:serverTimestamp(),timeMs:elapsed,score,board:encodeBoard()}).catch(()=>{});
   started=false;cancelAnimationFrame(raf);$('status').textContent="クリア！";
 }
@@ -537,21 +566,30 @@ async function registerSpectator(){
   $("joinStatus").textContent="👀 観覧モードで参加中";
   return true;
 }
-function startCountdown(){penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";const cd=$("countdown");cd.style.display="flex";const start=Date.now();clearInterval(countdownTimer);countdownTimer=setInterval(()=>{const d=Date.now()-start;const n=3-Math.floor(d/1000);if(n>0){cd.textContent=n}else{cd.textContent="START!";if(d>3400){clearInterval(countdownTimer);cd.style.display="none";started=true;localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick()}}},100)}
-function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";startCountdown();return}if(phase==="PLAYING"){if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});return}if(phase==="FINAL"){started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
+function startCountdown(){
+  penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";
+  const cd=$("countdown");cd.style.display="flex";const start=Date.now();let lastN=null;
+  clearInterval(countdownTimer);
+  countdownTimer=setInterval(()=>{
+    const d=Date.now()-start,n=3-Math.floor(d/1000);
+    if(n>0){cd.textContent=n;if(n!==lastN){playCountdownSound(n);lastN=n}}
+    else{cd.textContent="START!";if(lastN!==0){playCountdownSound(0);lastN=0}
+      if(d>3400){clearInterval(countdownTimer);cd.style.display="none";started=true;localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick()}
+    }
+  },100)
+}
+function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";lastGamePhase=phase;if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";startCountdown();return}if(phase==="PLAYING"){if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});return}if(phase==="FINAL"){started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
-function showRoundResult(result){const resultList=$("resultList");resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.points}点 / ${format(x.timeMs||0)}</span></div>`).join("");$("result").style.display="flex";if(result.nextReady)$("againBtn").textContent=currentRound<totalRounds?"次のラウンドへ":"最終結果を見る"}
-function showFinalResults(totals){const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="ゲーム画面に戻る"}
+function showRoundResult(result){
+  const resultList=$("resultList");
+  resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.points}点 / ${format(x.timeMs||0)}</span></div>`).join("");
+  $("result").style.display="flex";
+  $("againBtn").textContent=currentRound<totalRounds?"次の問題へ":"最終結果を見る";
+  if(lastResultSoundPhase!=="ROUND_RESULT"){playResultSound();lastResultSoundPhase="ROUND_RESULT";}
+}
+function showFinalResults(totals){if(lastResultSoundPhase!=="FINAL"){playResultSound();lastResultSoundPhase="FINAL";}const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="ゲーム画面に戻る"}
 async function finalizeRound(force=false){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
-  // 通常時は、3人以上なら3位が決まるまで結果画面へ進めない。
-  // 1～2人のラウンドだけは、全員クリアで結果確定とする。
-  if(!force){
-    const playNow=Object.values(participants).filter(p=>p.mode==="play");
-    const clearedNow=playNow.filter(p=>p.status==="CLEAR").length;
-    const required=playNow.length<=2?playNow.length:3;
-    if(playNow.length===0||clearedNow<required)return;
-  }
   roundFinalizeInProgress=true;
   let autoAdvance=false;
   try{
@@ -560,7 +598,7 @@ async function finalizeRound(force=false){
     const result={},totals={};
     play.forEach(p=>totals[p.uid]={name:p.name,points:p.roundPoints||0});
     cleared.forEach((p,i)=>{const pts=[3,2,1][i]||0;result[p.uid]={name:p.name,rank:i+1,points:pts,timeMs:p.timeMs||0};totals[p.uid]={name:p.name,points:(p.roundPoints||0)+pts};})
-    autoAdvance=play.length<=2&&cleared.length>=1&&currentRound<totalRounds;
+    autoAdvance=false;
     const updates={};
     updates[`rooms/${ROOM_ID}/game/phase`]=currentRound>=totalRounds?"FINAL":"ROUND_RESULT";
     updates[`rooms/${ROOM_ID}/game/result`]=result;
@@ -601,19 +639,19 @@ async function startGameOnline(){
 }
 async function startNextRoundOnline(){
   if(!dbReady())return;
-  const next=currentRound+1;if(next>totalRounds)return;
-  const sol=makeSolution(),reg=makeRegions(sol);
-  const updates={};
-  for(const p of Object.values(participants).filter(p=>p.mode==="play")){
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/status`]="WAITING";
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/timeMs`]=0;
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/score`]=0;
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/clearAt`]=null;
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/board`]=".".repeat(100);
-  }
-  updates[`rooms/${ROOM_ID}/game`]={phase:"COUNTDOWN",round:next,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null};
-  roundFinished=false;
-  await update(ref(db()),updates).catch(()=>{});
+  const gameRef=ref(db(),`rooms/${ROOM_ID}/game`);
+  try{
+    const tx=await runTransaction(gameRef,current=>{
+      if(!current || current.phase!=="ROUND_RESULT")return;
+      const next=(current.round||1)+1;
+      if(next>(current.totalRounds||totalRounds))return;
+      const sol=makeSolution(),reg=makeRegions(sol);
+      return {phase:"COUNTDOWN",round:next,totalRounds:current.totalRounds||totalRounds,
+        puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,
+        result:null,totals:null,forced:false};
+    });
+    if(tx.committed){roundFinished=false;gameOver=false;roundFinalizeInProgress=false}
+  }catch(e){console.error("next round transition error",e)}
 }
 async function restartWholeGame(){
   if(!dbReady()||mode!=="play")return;
@@ -652,10 +690,16 @@ $("joinBtn").onclick=async()=>{
 $("startBtn").onclick=async()=>{if(mode!=="play")return;if(!localPlayer||localPlayer.mode!=="play"){const ok=await registerPlayer();if(!ok)return;}if(localPlayer?.mode==="play")await startGameOnline();};
 document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".modeBtn").forEach(x=>x.classList.remove("active","dark"));b.classList.add("active");mode=b.dataset.mode;$("startBtn").textContent=mode==="watch"?"観覧を開始":"ゲーム開始！";if(dbReady()&&$("nameInput").value.trim()){if(mode==="play")await registerPlayer();else await registerSpectator();}}));
 document.querySelectorAll(".roundBtn").forEach(b=>b.addEventListener("click",()=>selectRounds(Number(b.dataset.round))));selectRounds(3);
-$("forceNextBtn")?.addEventListener("click",forceNextRound);
-$("restartGameBtn")?.addEventListener("click",restartWholeGame);
+$("forceNextBtn")?.addEventListener("click",()=>{
+  if(confirm("現在のラウンドを強制的に結果発表へ進めます。よろしいですか？"))forceNextRound();
+});
+$("restartGameBtn")?.addEventListener("click",()=>{
+  if(confirm("ゲームを最初からやり直します。現在の進行状況はリセットされます。よろしいですか？"))restartWholeGame();
+});
 $("clearMyakBtn")?.addEventListener("click",clearAllMyak);
-$("backWaitingBtn")?.addEventListener("click",returnToWaiting);
+$("backWaitingBtn")?.addEventListener("click",()=>{
+  if(confirm("待機画面に戻ります。現在のゲーム進行は終了します。よろしいですか？"))returnToWaiting();
+});
 $("againBtn").onclick=async()=>{if(gameOver){$("result").style.display="none";$("startScreen").style.display="none";$("status").textContent="ゲーム終了";return}$("result").style.display="none";await startNextRoundOnline();};
 $("watchSelect")?.addEventListener("change",e=>{selectedWatchUid=e.target.value;const p=participants[selectedWatchUid];if(p?.board){decodeBoard(p.board);render()}});
 setupChat();
