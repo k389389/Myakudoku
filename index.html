@@ -276,6 +276,7 @@ button{cursor:pointer}
     <div id="resultList"></div>
     <div id="resultNextInfo" class="notice" style="margin-top:15px;font-size:15px;font-weight:900">結果を5秒表示 → 3カウント → 次のラウンド開始<br><span style="font-size:13px;font-weight:700">5秒後、次のラウンドが始まります。</span></div>
     <button class="btn gold" id="againBtn" style="display:none">次の問題</button>
+    <button class="btn" id="returnGameBtn" style="display:none;margin-top:10px">ゲーム画面に戻る</button>
   </div>
 </div>
 
@@ -445,6 +446,7 @@ let totalRounds=3,currentRound=1,roundFinished=false;
 let participants={}, chatSeen={}, selectedWatchUid=null, countdownTimer=null, firebaseUnsubs=[];
 let localPlayer=null, localStartAt=0, autoAdvanceTimer=null, roundFinalizeInProgress=false;
 let audioCtx=null, lastGamePhase=null, lastResultSoundPhase=null, resultAdvanceTimer=null;
+let currentGamePhase="WAITING", finalResultDismissed=false;
 
 const $=id=>document.getElementById(id);
 const boardEl=$("board");
@@ -547,6 +549,13 @@ function setupChat(){
 }
 function selectRounds(n){totalRounds=n;document.querySelectorAll(".roundBtn").forEach(b=>b.classList.toggle("selected",Number(b.dataset.round)===n));$("roundInfo").textContent=`現在：${n}R`;if(dbReady())update(ref(db(),`rooms/${ROOM_ID}/game`),{totalRounds:n}).catch(()=>{})}
 async function registerPlayer(){
+  if(currentGamePhase!=="WAITING" && !(participants[uid()]?.mode==="play")){
+    $("joinStatus").textContent="対戦中は観覧モードでのみ参加できます。";
+    mode="watch";
+    document.querySelectorAll(".modeBtn").forEach(x=>x.classList.toggle("active",x.dataset.mode==="watch"));
+    $("startBtn").textContent="観覧を開始";
+    return false;
+  }
   try{sessionStorage.removeItem("expo_waiting")}catch(e){}
   if(!dbReady()) return false;
   name=$("nameInput").value.trim()||"プレイヤー";
@@ -581,7 +590,7 @@ function startCountdown(){
     }
   },100)
 }
-function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";lastGamePhase=phase;if(phase!=="WAITING"&&(()=>{try{return sessionStorage.getItem("expo_waiting")==="1"}catch(e){return false}})()){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);$("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";return}if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){clearTimeout(resultAdvanceTimer);penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";$("result").style.display="none";startCountdown();return}if(phase==="PLAYING"){clearTimeout(resultAdvanceTimer);if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});scheduleNextRound(g);return}if(phase==="FINAL"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
+function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";currentGamePhase=phase;if(phase!=="FINAL")finalResultDismissed=false;lastGamePhase=phase;if(phase!=="WAITING"&&(()=>{try{return sessionStorage.getItem("expo_waiting")==="1"}catch(e){return false}})()){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);$("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";return}if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){clearTimeout(resultAdvanceTimer);penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";$("result").style.display="none";startCountdown();return}if(phase==="PLAYING"){clearTimeout(resultAdvanceTimer);if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});scheduleNextRound(g);return}if(phase==="FINAL"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);if(!finalResultDismissed)showFinalResults(g.totals||{});return}}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
 function showRoundResult(result){
   const resultList=$("resultList");
@@ -599,7 +608,7 @@ function scheduleNextRound(g){
     await startNextRoundOnline();
   },wait);
 }
-function showFinalResults(totals){if(lastResultSoundPhase!=="FINAL"){playResultSound();lastResultSoundPhase="FINAL";}const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').style.display="none";$('resultNextInfo').innerHTML="最終結果です。"}
+function showFinalResults(totals){if(lastResultSoundPhase!=="FINAL"){playResultSound();lastResultSoundPhase="FINAL";}const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').style.display="none";$('resultNextInfo').innerHTML="最終結果です。";$("returnGameBtn").style.display="block";}
 async function finalizeRound(force=false){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
   roundFinalizeInProgress=true;
@@ -726,7 +735,19 @@ $("joinBtn").onclick=async()=>{
   }
 };
 $("startBtn").onclick=async()=>{if(mode!=="play")return;if(!localPlayer||localPlayer.mode!=="play"){const ok=await registerPlayer();if(!ok)return;}if(localPlayer?.mode==="play")await startGameOnline();};
-document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".modeBtn").forEach(x=>x.classList.remove("active","dark"));b.classList.add("active");mode=b.dataset.mode;$("startBtn").textContent=mode==="watch"?"観覧を開始":"ゲーム開始！";if(dbReady()&&$("nameInput").value.trim()){if(mode==="play")await registerPlayer();else await registerSpectator();}}));
+document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",async()=>{
+  let requestedMode=b.dataset.mode;
+  if(requestedMode==="play" && currentGamePhase!=="WAITING" && !(participants[uid()]?.mode==="play")){
+    requestedMode="watch";
+    $("joinStatus").textContent="対戦中は観覧モードでのみ参加できます。";
+  }
+  document.querySelectorAll(".modeBtn").forEach(x=>x.classList.toggle("active",x.dataset.mode===requestedMode));
+  mode=requestedMode;
+  $("startBtn").textContent=mode==="watch"?"観覧を開始":"ゲーム開始！";
+  if(dbReady()&&$("nameInput").value.trim()){
+    if(mode==="play")await registerPlayer();else await registerSpectator();
+  }
+}));
 document.querySelectorAll(".roundBtn").forEach(b=>b.addEventListener("click",()=>selectRounds(Number(b.dataset.round))));selectRounds(3);
 $("forceNextBtn")?.addEventListener("click",()=>{
   if(confirm("現在のラウンドを強制的に結果発表へ進めます。よろしいですか？"))forceNextRound();
@@ -739,6 +760,12 @@ $("backWaitingBtn")?.addEventListener("click",()=>{
   if(confirm("待機画面に戻ります。現在のゲーム進行は終了します。よろしいですか？"))returnToWaiting();
 });
 $("againBtn").onclick=()=>{};
+$("returnGameBtn")?.addEventListener("click",()=>{
+  finalResultDismissed=true;
+  $("result").style.display="none";
+  $("startScreen").style.display="none";
+  $("status").textContent="最終結果を確認済み";
+});
 $("watchSelect")?.addEventListener("change",e=>{selectedWatchUid=e.target.value;const p=participants[selectedWatchUid];if(p?.board){decodeBoard(p.board);render()}});
 setupChat();
 window.addEventListener("firebase-ready",()=>{subscribeFirebase();});
