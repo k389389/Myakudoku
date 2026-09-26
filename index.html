@@ -160,6 +160,18 @@ button{cursor:pointer}
   100%{transform:translate(var(--dx),var(--dy)) scale(1.25) rotate(220deg);opacity:0}
 }
 </style>
+<style id="v17-style">
+.scoreMainRow{display:flex;gap:6px;justify-content:center;align-items:center}
+.scoreStat{flex:1;min-width:0;text-align:center}
+.clearMyakBtn{flex:0 0 112px;min-height:42px;border:2px solid #ffe37a;border-radius:11px;background:#f2c94c;color:#16243b;font-weight:900;font-size:13px;line-height:1.15;box-shadow:0 3px 0 #9b7615;cursor:pointer}
+.clearMyakBtn:active{transform:translateY(2px);box-shadow:0 1px 0 #9b7615}
+.chatFloatWrap{position:relative;height:72px;margin:7px 0 0;overflow:hidden;pointer-events:none}
+.chatFloat{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.chatBubble{position:absolute;left:10px;bottom:-10px;max-width:calc(100% - 20px);padding:7px 12px;border-radius:16px;background:#fff;color:#17283b;font-weight:800;font-size:13px;box-shadow:0 3px 10px #0004;animation:chatFloatUp 4s ease-out forwards}
+.chatBubble::before{content:"";position:absolute;left:14px;bottom:-5px;width:10px;height:10px;background:#fff;transform:rotate(45deg)}
+@media(max-width:520px){.clearMyakBtn{flex-basis:92px;font-size:12px}.time{font-size:31px}}
+</style>
+
 </head>
 <body>
 <div class="startScreen" id="startScreen">
@@ -255,22 +267,23 @@ button{cursor:pointer}
   </div>
   <div class="layout">
     <section class="card boardCard">
-      <div class="chatFloatWrap">
-        <div id="chatFloat" class="chatFloat"></div>
-      </div>
       <div class="boardWrap">
         <div id="board" class="board"></div>
+      </div>
+      <div class="chatFloatWrap">
+        <div id="chatFloat" class="chatFloat"></div>
       </div>
     </section>
 
     <aside class="card side">
       <div class="scoreBox">
-        <div style="display:flex;gap:10px;justify-content:center;align-items:flex-end">
-          <div style="flex:1">
+        <div class="scoreMainRow">
+          <div class="scoreStat">
             <div class="small">TIME</div>
             <div id="time" class="time">00:00</div>
           </div>
-          <div style="flex:1">
+          <button id="clearMyakBtn" class="clearMyakBtn" type="button">全て消す</button>
+          <div class="scoreStat">
             <div class="small">SCORE</div>
             <div id="score" class="time">500</div>
           </div>
@@ -444,6 +457,22 @@ function showClearEffect(playerName){
   window.__clearFxTimer=setTimeout(()=>fx.classList.remove("active"),1200);
 }
 function updateScore(){const elapsed=Date.now()-localStartAt;$('time').textContent=format(elapsed);$('score').textContent=String(Math.max(0,500-Math.floor(elapsed/1000)-penaltyPoints))}
+async function clearAllMyak(){
+  if(mode!=="play"||!started||roundFinished||gameOver)return;
+  let changed=false;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(placed[r][c] || flags[r][c]){
+      placed[r][c]=false;
+      flags[r][c]=false;
+      changed=true;
+    }
+  }
+  if(changed){
+    render();
+    await saveMyBoard();
+    $("message").textContent="全て消しました";
+  }
+}
 function tick(){if(!started||roundFinished||gameOver)return;updateScore();raf=requestAnimationFrame(tick)}
 async function saveMyBoard(){if(!dbReady()||mode!=="play")return;const p=ref(db(),`rooms/${ROOM_ID}/players/${uid()}`);await update(p,{board:encodeBoard(),updatedAt:serverTimestamp()}).catch(()=>{})}
 async function submitClear(){
@@ -502,7 +531,7 @@ function startCountdown(){const cd=$("countdown");cd.style.display="flex";const 
 function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";startCountdown();return}if(phase==="PLAYING"){if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});return}if(phase==="FINAL"){started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
 function showRoundResult(result){const resultList=$("resultList");resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.points}点 / ${format(x.timeMs||0)}</span></div>`).join("");$("result").style.display="flex";if(result.nextReady)$("againBtn").textContent=currentRound>=totalRounds?"最終結果を見る":`ROUND ${currentRound+1}へ`}
-function showFinalResults(totals){const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="エントリー画面へ"}
+function showFinalResults(totals){const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="ゲーム画面に戻る"}
 async function finalizeRound(force=false){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
   roundFinalizeInProgress=true;
@@ -609,8 +638,9 @@ document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",asyn
 document.querySelectorAll(".roundBtn").forEach(b=>b.addEventListener("click",()=>selectRounds(Number(b.dataset.round))));selectRounds(3);
 $("forceNextBtn")?.addEventListener("click",forceNextRound);
 $("restartGameBtn")?.addEventListener("click",restartWholeGame);
+$("clearMyakBtn")?.addEventListener("click",clearAllMyak);
 $("backWaitingBtn")?.addEventListener("click",returnToWaiting);
-$("againBtn").onclick=async()=>{if(gameOver){$("result").style.display="none";$("startScreen").style.display="flex";return}$("result").style.display="none";await startNextRoundOnline();};
+$("againBtn").onclick=async()=>{if(gameOver){$("result").style.display="none";$("startScreen").style.display="none";$("status").textContent="ゲーム終了";return}$("result").style.display="none";await startNextRoundOnline();};
 $("watchSelect")?.addEventListener("change",e=>{selectedWatchUid=e.target.value;const p=participants[selectedWatchUid];if(p?.board){decodeBoard(p.board);render()}});
 setupChat();
 window.addEventListener("firebase-ready",()=>{subscribeFirebase();});
