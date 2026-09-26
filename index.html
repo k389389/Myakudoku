@@ -159,6 +159,32 @@ button{cursor:pointer}
   15%{opacity:1}
   100%{transform:translate(var(--dx),var(--dy)) scale(1.25) rotate(220deg);opacity:0}
 }
+
+/* Myakudoku! カラフルロゴ */
+.logoLetters{
+  display:inline-flex;
+  align-items:baseline;
+  font-weight:1000;
+  white-space:nowrap;
+}
+.logoChar{
+  display:inline-block;
+  color:#fff;
+  -webkit-text-stroke:1.5px #fff;
+  text-shadow:0 4px 0 #17304b,0 7px 12px #0008;
+  margin-right:-1px;
+}
+.logoChar.c0,.logoChar.c3{color:#ef2b22}
+.logoChar.c1{color:#ff9d00}
+.logoChar.c2{color:#27b53e}
+.logoChar.c4{color:#1689e8}
+.logoChar.c5{color:#5c35d6}
+.logoChar.c6{color:#d934c8}
+.logoChar.c7{color:#ff4d7d}
+.logoChar.c8{color:#ef2b22}
+.logoChar.c9{color:#ffcf2f}
+.startCard h1 .logoLetters{font-size:1em;letter-spacing:-2px}
+.startCard h1 .logoChar{text-shadow:0 4px 0 #17304b,0 7px 12px #0008}
 </style>
 <style id="v17-style">
 .scoreMainRow{display:flex;gap:6px;justify-content:center;align-items:center}
@@ -176,7 +202,7 @@ button{cursor:pointer}
 <body>
 <div class="startScreen" id="startScreen">
   <div class="card startCard">
-    <h1><span>Myakudoku!</span></h1>
+    <h1><span class="logoLetters"><span class="logoChar c0">M</span><span class="logoChar c1">y</span><span class="logoChar c2">a</span><span class="logoChar c3">k</span><span class="logoChar c4">u</span><span class="logoChar c5">d</span><span class="logoChar c6">o</span><span class="logoChar c7">k</span><span class="logoChar c8">u</span><span class="logoChar c9">!</span></span></h1>
     <p>10×10の盤面で、ミャクミャクを完成させよう。</p>
     <input id="nameInput" class="name" maxlength="12" placeholder="プレイヤー名を入力">
     <div class="modeRow">
@@ -254,7 +280,7 @@ button{cursor:pointer}
 
 <div class="app">
   <div class="top">
-    <div class="logo">Myakudoku<span>!</span></div>
+    <div class="logo"><span class="logoLetters"><span class="logoChar c0">M</span><span class="logoChar c1">y</span><span class="logoChar c2">a</span><span class="logoChar c3">k</span><span class="logoChar c4">u</span><span class="logoChar c5">d</span><span class="logoChar c6">o</span><span class="logoChar c7">k</span><span class="logoChar c8">u</span><span class="logoChar c9">!</span></span></div>
     <div class="modeBadge" id="modeBadge">プレイヤー</div>
   </div>
   <div class="layout">
@@ -305,8 +331,6 @@ button{cursor:pointer}
         <div class="small">観覧するプレイヤー</div>
         <select id="watchSelect" class="name" style="margin-top:5px"></select>
       </div>
-
-      <div id="message" class="message">盤面を確認してスタート！</div>
 
       <div class="rules">
         <strong>ルール</strong><br>
@@ -462,7 +486,7 @@ async function clearAllMyak(){
   if(changed){
     render();
     await saveMyBoard();
-    $("message").textContent="全て消しました";
+    if($("message"))$("message").textContent="全て消しました";
   }
 }
 function tick(){if(!started||roundFinished||gameOver)return;updateScore();raf=requestAnimationFrame(tick)}
@@ -500,12 +524,8 @@ async function registerPlayer(){
   const p={uid:uid(),name,mode,status:"WAITING",color:existing?.color||"#35c9ff",host:false,roundPoints:existing?.roundPoints||0,joinedAt:serverTimestamp()};
   await set(playerRef,p);
   await onDisconnect(playerRef).remove();
-  const hostRef=ref(db(),`rooms/${ROOM_ID}/hostUid`);
-  const tx=await runTransaction(hostRef,current=>current||uid());
-  const isHost=tx.snapshot.val()===uid();
-  await update(playerRef,{host:isHost});
-  localPlayer={...p,host:isHost};
-  $("joinStatus").textContent=isHost?"🟢 プレイヤーとして参加中（ゲーム開始担当）":"🟢 プレイヤーとして参加中";
+  localPlayer={...p,host:false};
+  $("joinStatus").textContent="🟢 プレイヤーとして参加中（誰でもゲーム開始できます）";
   return true;
 }
 async function registerSpectator(){
@@ -517,8 +537,8 @@ async function registerSpectator(){
   $("joinStatus").textContent="👀 観覧モードで参加中";
   return true;
 }
-function startCountdown(){const cd=$("countdown");cd.style.display="flex";const start=Date.now();clearInterval(countdownTimer);countdownTimer=setInterval(()=>{const d=Date.now()-start;const n=3-Math.floor(d/1000);if(n>0){cd.textContent=n}else{cd.textContent="START!";if(d>3400){clearInterval(countdownTimer);cd.style.display="none";started=true;localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick()}}},100)}
-function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";startCountdown();return}if(phase==="PLAYING"){if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});return}if(phase==="FINAL"){started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
+function startCountdown(){penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";const cd=$("countdown");cd.style.display="flex";const start=Date.now();clearInterval(countdownTimer);countdownTimer=setInterval(()=>{const d=Date.now()-start;const n=3-Math.floor(d/1000);if(n>0){cd.textContent=n}else{cd.textContent="START!";if(d>3400){clearInterval(countdownTimer);cd.style.display="none";started=true;localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick()}}},100)}
+function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";startCountdown();return}if(phase==="PLAYING"){if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});return}if(phase==="FINAL"){started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
 function showRoundResult(result){const resultList=$("resultList");resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.points}点 / ${format(x.timeMs||0)}</span></div>`).join("");$("result").style.display="flex";if(result.nextReady)$("againBtn").textContent=currentRound<totalRounds?"次のラウンドへ":"最終結果を見る"}
 function showFinalResults(totals){const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="ゲーム画面に戻る"}
@@ -621,7 +641,7 @@ $("joinBtn").onclick=async()=>{
     $("joinStatus").textContent=`参加エラー（${e.code||e.message||"unknown"}）`;
   }
 };
-$("startBtn").onclick=async()=>{if(mode!=="play"){return}if(!localPlayer||localPlayer.mode!=="play")await registerPlayer();if(localPlayer?.mode==="play")await startGameOnline();};
+$("startBtn").onclick=async()=>{if(mode!=="play")return;if(!localPlayer||localPlayer.mode!=="play"){const ok=await registerPlayer();if(!ok)return;}if(localPlayer?.mode==="play")await startGameOnline();};
 document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".modeBtn").forEach(x=>x.classList.remove("active","dark"));b.classList.add("active");mode=b.dataset.mode;$("startBtn").textContent=mode==="watch"?"観覧を開始":"ゲーム開始！";if(dbReady()&&$("nameInput").value.trim()){if(mode==="play")await registerPlayer();else await registerSpectator();}}));
 document.querySelectorAll(".roundBtn").forEach(b=>b.addEventListener("click",()=>selectRounds(Number(b.dataset.round))));selectRounds(3);
 $("forceNextBtn")?.addEventListener("click",forceNextRound);
