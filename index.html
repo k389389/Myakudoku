@@ -29,8 +29,8 @@ button{cursor:pointer}
 .cell.seed{box-shadow:inset 0 0 0 3px #fff8}
 .cell.selected{outline:4px solid #fff;outline-offset:-5px;z-index:2}
 .cell.invalid{animation:shake .18s linear 2;box-shadow:inset 0 0 0 5px #e11}
-.cell img.icon{width:78%;height:78%;object-fit:contain;pointer-events:none}
-.cell img.flag{width:58%;height:58%;object-fit:contain;opacity:.95;pointer-events:none}
+.cell img.icon{width:78%;height:78%;object-fit:contain;pointer-events:none;background:transparent;border:0}
+.cell img.flag{width:58%;height:58%;object-fit:contain;opacity:.95;pointer-events:none;background:transparent;border:0}
 @keyframes shake{25%{transform:translateX(3px)}75%{transform:translateX(-3px)}}
 .side{padding:12px;display:flex;flex-direction:column;gap:10px}
 .scoreBox{background:#06172b;border-radius:12px;padding:10px;text-align:center}
@@ -70,20 +70,100 @@ button{cursor:pointer}
   .side{padding:9px}
   .players{display:grid;grid-template-columns:1fr 1fr}
 }
+
+.chatBox{background:#f7f7f7;border:1px solid #c9c9c9;border-radius:8px;overflow:hidden;color:#333}
+.chatInputRow{display:flex;background:#fff}
+.chatInput{flex:1;min-width:0;border:0;border-right:1px solid #ddd;padding:9px 10px;font-size:14px;outline:none;color:#222}
+.chatSend{width:52px;border:0;background:#333;color:#fff;font-weight:900}
+.chatEmoji{display:flex;justify-content:space-around;gap:2px;padding:5px;background:#eee;border-top:1px solid #ddd}
+.chatEmoji button{border:1px solid #ccc;background:#fff;border-radius:6px;width:36px;height:32px;font-size:19px;padding:0}
+.chatEmoji button:active{transform:scale(.94)}
+.entryChat{margin-top:14px;text-align:left}
+.entryChat .chatBox{background:#fff}
+.entryChatTitle{font-size:12px;font-weight:900;color:#55708a;margin-bottom:5px}
+.chatFloatWrap{position:relative;height:92px;margin-top:8px;overflow:hidden;border-radius:10px;background:rgba(6,23,43,.58);border:1px solid #315372}
+.chatFloat{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.chatBubble{position:absolute;left:10px;bottom:-10px;max-width:calc(100% - 20px);padding:7px 12px;border-radius:16px;background:#fff;color:#17283b;font-weight:800;font-size:13px;box-shadow:0 3px 10px #0004;animation:chatFloatUp 4s ease-out forwards}
+.chatBubble::before{content:"";position:absolute;left:14px;bottom:-5px;width:10px;height:10px;background:#fff;transform:rotate(45deg)}
+@keyframes chatFloatUp{
+  0%{transform:translateY(0);opacity:0}
+  8%{opacity:1}
+  75%{opacity:1}
+  100%{transform:translateY(-105px);opacity:0}
+}
+.confirmBox{margin-top:12px;padding:12px;border-radius:12px;background:#102d4d;border:1px solid #46749a}
+.confirmBox strong{display:block;margin-bottom:8px;color:#ffd52e}
+.confirmActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:800px){
+  .chatFloatWrap{height:82px}
+}
+
+
+.roundSelect{margin:12px 0;padding:12px;border:1px solid #315372;border-radius:12px;background:#102d4d}
+.roundSelectTitle{font-weight:900;margin-bottom:8px;color:#fff}
+.roundButtons{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.roundBtn{border:1px solid #557da1;background:#fff;color:#17314a;border-radius:7px;padding:8px 3px;font-weight:900}
+.roundBtn.selected{background:#ffd52e;border-color:#f1b900}
+.roundBtn:active{transform:scale(.97)}
+.roundInfo{font-size:12px;margin-top:8px;color:#dcecff}
+.forceNext{margin-top:16px;padding-top:12px;border-top:1px solid #315372}
+.forceNext button{width:100%;font-weight:900}
+
 </style>
 </head>
 <body>
 <div class="startScreen" id="startScreen">
   <div class="card startCard">
     <h1><span>Myakudoku!</span></h1>
-    <p>10×10の盤面で、ミャクミャクを10体完成させよう。</p>
+    <p>10×10の盤面で、ミャクミャクを完成させよう。</p>
     <input id="nameInput" class="name" maxlength="12" placeholder="プレイヤー名を入力">
     <div class="modeRow">
       <button class="btn modeBtn active" data-mode="play">プレイヤーで参加</button>
       <button class="btn dark modeBtn" data-mode="watch">観覧モード</button>
     </div>
-    <button class="btn gold" id="startBtn" style="width:100%;font-size:18px">ゲームを開始</button>
-    <div class="notice" style="margin-top:12px">この版はまず「盤面・ルール・観覧UI」を確認するためのHTMLプロトタイプです。Firebase接続は次の段階で追加できます。</div>
+    <div class="roundSelect">
+      <div class="roundSelectTitle">何ラウンド遊びますか？</div>
+      <div class="roundButtons" id="roundButtons">
+        <button class="roundBtn" data-round="1">1R</button>
+        <button class="roundBtn" data-round="2">2R</button>
+        <button class="roundBtn" data-round="3">3R</button>
+        <button class="roundBtn" data-round="4">4R</button>
+        <button class="roundBtn" data-round="5">5R</button>
+        <button class="roundBtn" data-round="6">6R</button>
+        <button class="roundBtn" data-round="7">7R</button>
+        <button class="roundBtn" data-round="8">8R</button>
+        <button class="roundBtn" data-round="9">9R</button>
+        <button class="roundBtn" data-round="10">10R</button>
+      </div>
+      <div id="roundInfo" class="roundInfo">現在：3R</div>
+    </div>
+
+    <div class="entryChat">
+      <div class="entryChatTitle">みんなのチャット</div>
+      <div class="chatBox">
+        <div class="chatInputRow">
+          <input id="entryChatInput" class="chatInput" maxlength="60" placeholder="メッセージを入力">
+          <button id="entryChatSend" class="chatSend">送信</button>
+        </div>
+        <div class="chatEmoji">
+          <button data-chat="🍄">🍄</button><button data-chat="😁">😁</button>
+          <button data-chat="😍">😍</button><button data-chat="🤣">🤣</button>
+          <button data-chat="😰">😰</button><button data-chat="👏">👏</button>
+          <button data-chat="🔥">🔥</button>
+        </div>
+      </div>
+      <div id="entryChatLog" class="notice" style="margin-top:7px;max-height:90px;overflow:auto;text-align:left"></div>
+    </div>
+
+    <button class="btn gold" id="startBtn" style="width:100%;font-size:18px;margin-top:12px">ゲーム開始！</button>
+    <div id="startConfirm" class="confirmBox hidden">
+      <strong>「ゲーム開始！」でゲームを開始します。</strong>
+      <div class="confirmActions">
+        <button class="btn gold" id="confirmStartBtn">はい、始めます！</button>
+        <button class="btn dark" id="cancelStartBtn">まだです</button>
+      </div>
+    </div>
+    <div class="notice" style="margin-top:12px">ゲーム開始前もチャットできます。準備ができたら「始めますよー！」を押して確認してからスタートします。</div>
   </div>
 </div>
 
@@ -107,6 +187,12 @@ button{cursor:pointer}
       <div class="boardWrap">
         <div id="board" class="board"></div>
       </div>
+      <div class="chatFloatWrap">
+        <div id="chatFloat" class="chatFloat"></div>
+      </div>
+      <div class="forceNext">
+        <button id="forceNextBtn" class="btn dark">⏭ 誰かが止まったとき：強制的にラウンド結果へ</button>
+      </div>
     </section>
 
     <aside class="card side">
@@ -124,14 +210,22 @@ button{cursor:pointer}
         <div id="status" class="small">スタート待ち</div>
       </div>
 
+      <div class="chatBox">
+        <div class="chatInputRow">
+          <input id="chatInput" class="chatInput" maxlength="60" placeholder="メッセージを入力">
+          <button id="chatSend" class="chatSend">送信</button>
+        </div>
+        <div class="chatEmoji">
+          <button data-chat="🍄">🍄</button><button data-chat="😁">😁</button>
+          <button data-chat="😍">😍</button><button data-chat="🤣">🤣</button>
+          <button data-chat="😰">😰</button><button data-chat="👏">👏</button>
+          <button data-chat="🔥">🔥</button>
+        </div>
+      </div>
+
       <div>
         <div class="small">参加プレイヤー</div>
         <div id="players" class="players"></div>
-      </div>
-
-      <div class="actions">
-        <button id="modeBtn" class="btn dark">配置：ミャクミャク</button>
-        <button id="checkBtn" class="btn gold">判定</button>
       </div>
 
       <div id="watchBox" class="hidden">
@@ -161,7 +255,7 @@ const XMARK = "data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHR
 const N=10;
 const palette=["#fff477","#6cf06c","#69e5d0","#69d7ef","#6d8ff0","#a06df0","#d76df0","#ff6fb4","#ffd080","#ff7777"];
 let name="", mode="play", board=[], solution=[], placed=[], flags=[], regions=[];
-let started=false, startAt=0, raf=0, gameOver=false, penaltyPoints=0;
+let started=false, startAt=0, raf=0, gameOver=false, penaltyPoints=0, totalRounds=3, currentRound=1, roundFinished=false, roundResults=[];
 let participants=[];
 
 const $=id=>document.getElementById(id);
@@ -218,10 +312,6 @@ function newPuzzle(){
   board=Array.from({length:N},()=>Array(N).fill(0));
   placed=Array.from({length:N},()=>Array(N).fill(false));
   flags=Array.from({length:N},()=>Array(N).fill(false));
-  // Give a few fixed clues, like the Scratch version.
-  const clueCount=4;
-  const rows=shuffle([...Array(N).keys()]).slice(0,clueCount);
-  rows.forEach(r=>placed[r][solution[r]]=true);
   render();
 }
 function canPlace(r,c){
@@ -298,7 +388,11 @@ function tapCell(r,c,el){
     $("message").textContent="空白に戻しました";
   }
   render();
-  if(isComplete()) finish();
+  if(isComplete()){
+    const me=players.find(p=>p.name===name);
+    if(me){me.status="CLEAR!";me.time=performance.now()-startAt;me.score=Math.floor(500-Math.floor(me.time/1000)-penaltyPoints);}
+    if(getClearedPlayers().length>=Math.min(3,players.length)) finishRound(false);
+  }
 }
 function format(ms){
   const s=ms/1000;
@@ -313,14 +407,7 @@ function tick(){
   raf=requestAnimationFrame(tick);
 }
 function finish(){
-  gameOver=true; cancelAnimationFrame(raf);
-  const t=performance.now()-startAt;
-  $("status").textContent="CLEAR!";
-  $("message").textContent=`🎉 ${name}さん、クリア！ ${format(t)}`;
-  const me=participants.find(p=>p.name===name);
-  if(me){me.status="CLEAR!";me.time=t;me.score=Math.floor(500-Math.floor(t/1000)-penaltyPoints)}
-  renderPlayers();
-  setTimeout(showResult,350);
+  if(!roundFinished) finishRound(false);
 }
 function renderPlayers(){
   const box=$("players");box.innerHTML="";
@@ -329,7 +416,7 @@ function renderPlayers(){
     const left=document.createElement("span");
     left.innerHTML=`<span class="dot" style="background:${p.color}"></span>${escapeHtml(p.name)}`;
     const right=document.createElement("span");right.className="small";
-    right.textContent=p.status==="CLEAR!" ? `CLEAR! ${format(p.time||0)} / ${p.score??""}点` : p.status;
+    right.textContent=p.status==="CLEAR!" ? `CLEAR! ${format(p.time||0)} / ${p.score??""}点 / 合計${p.roundPoints||0}点` : `${p.status}${p.roundPoints?` / 合計${p.roundPoints}点`:""}`;
     row.append(left,right);box.appendChild(row);
   });
   const sel=$("watchSelect");sel.innerHTML="";
@@ -341,6 +428,169 @@ function showResult(){
   $("resultList").innerHTML=sorted.length ? sorted.map((p,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(p.name)}</b><span>${format(p.time)} / ${p.score??""}点</span></div>`).join("") : "";
   $("result").style.display="flex";
 }
+
+function addChatMessage(message, sender=name||"プレイヤー"){
+  const msg=String(message||"").trim();
+  if(!msg) return;
+
+  // Entry screen log
+  const entryLog=$("entryChatLog");
+  if(entryLog){
+    const line=document.createElement("div");
+    line.style.margin="3px 0";
+    line.innerHTML=`<b>${escapeHtml(sender)}：</b>${escapeHtml(msg)}`;
+    entryLog.appendChild(line);
+    entryLog.scrollTop=entryLog.scrollHeight;
+  }
+
+  // Puzzle-area floating message
+  const wrap=$("chatFloat");
+  if(wrap){
+    const bubble=document.createElement("div");
+    bubble.className="chatBubble";
+    bubble.textContent=`${sender}：${msg}`;
+    // Slightly different horizontal starting point for successive messages.
+    bubble.style.left=(10+Math.floor(Math.random()*35))+"px";
+    wrap.appendChild(bubble);
+    setTimeout(()=>bubble.remove(),4100);
+  }
+}
+
+function sendChat(inputId){
+  const input=$(inputId);
+  if(!input) return;
+  const msg=input.value.trim();
+  if(!msg) return;
+  const sender=name || $("nameInput")?.value.trim() || "プレイヤー";
+  addChatMessage(msg,sender);
+  input.value="";
+  input.focus();
+}
+
+function setupChat(){
+  $("chatSend")?.addEventListener("click",()=>sendChat("chatInput"));
+  $("chatInput")?.addEventListener("keydown",e=>{
+    if(e.key==="Enter"){e.preventDefault();sendChat("chatInput")}
+  });
+  $("entryChatSend")?.addEventListener("click",()=>sendChat("entryChatInput"));
+  $("entryChatInput")?.addEventListener("keydown",e=>{
+    if(e.key==="Enter"){e.preventDefault();sendChat("entryChatInput")}
+  });
+
+  document.querySelectorAll("[data-chat]").forEach(b=>{
+    b.addEventListener("click",()=>{
+      const target=$("startScreen").style.display!=="none" ? $("entryChatInput") : $("chatInput");
+      if(!target) return;
+      target.value += b.dataset.chat;
+      target.focus();
+    });
+  });
+}
+
+function showStartConfirmation(){
+  $("startConfirm").classList.remove("hidden");
+  $("startBtn").classList.add("hidden");
+  const nm=$("nameInput").value.trim()||"プレイヤー";
+  addChatMessage("ゲーム開始！",nm);
+}
+
+function cancelStartConfirmation(){
+  $("startConfirm").classList.add("hidden");
+  $("startBtn").classList.remove("hidden");
+}
+
+
+function selectRounds(n){
+  totalRounds=n;
+  document.querySelectorAll(".roundBtn").forEach(b=>{
+    b.classList.toggle("selected",Number(b.dataset.round)===n);
+  });
+  const info=$("roundInfo");
+  if(info) info.textContent=`現在：${n}R`;
+}
+
+function getClearedPlayers(){
+  return players.filter(p=>p.status==="CLEAR!").sort((a,b)=>(a.time||Infinity)-(b.time||Infinity));
+}
+
+function awardRoundPoints(){
+  const cleared=getClearedPlayers().slice(0,3);
+  cleared.forEach((p,i)=>{
+    p.roundPoints=(p.roundPoints||0)+([3,2,1][i]||0);
+  });
+  roundResults=cleared.map((p,i)=>({
+    name:p.name, time:p.time||0, points:[3,2,1][i]||0,
+    total:p.roundPoints||0
+  }));
+}
+
+function finishRound(forced=false){
+  if(roundFinished) return;
+  roundFinished=true;
+  cancelAnimationFrame(raf);
+  awardRoundPoints();
+
+  const cleared=getClearedPlayers().slice(0,3);
+  $("status").textContent=forced ? "強制終了：ラウンド結果" : "ラウンド結果";
+  $("message").textContent=`ROUND ${currentRound} 結果発表`;
+  const lines=cleared.length
+    ? cleared.map((p,i)=>`${i+1}位 ${p.name}：${[3,2,1][i]}点`).join(" / ")
+    : "クリア者なし";
+  const result=document.createElement("div");
+  result.className="notice";
+  result.style.marginTop="10px";
+  result.id="roundResultNotice";
+  result.innerHTML=`<b>ROUND ${currentRound} 結果</b><br>${lines}<br><span class="small">3人クリアで自動終了${forced?"／強制終了しました":""}</span>`;
+  const old=$("roundResultNotice"); if(old) old.remove();
+  document.querySelector(".boardCard")?.appendChild(result);
+
+  if(currentRound>=totalRounds){
+    gameOver=true;
+    $("status").textContent="全ラウンド終了";
+    $("message").textContent="🏆 最終結果";
+    showFinalResults();
+  }else{
+    const next=document.createElement("button");
+    next.id="nextRoundBtn";
+    next.className="btn gold";
+    next.style.width="100%";
+    next.style.marginTop="10px";
+    next.textContent=`ROUND ${currentRound+1}へ`;
+    next.onclick=()=>startNextRound();
+    document.querySelector(".boardCard")?.appendChild(next);
+  }
+  renderPlayers();
+}
+
+function startNextRound(){
+  const old=$("roundResultNotice"); if(old) old.remove();
+  const next=$("nextRoundBtn"); if(next) next.remove();
+  currentRound++;
+  roundFinished=false;
+  penaltyPoints=0;
+  gameOver=false;
+  score=500;
+  $("score").textContent="500";
+  $("time").textContent="00:00.00";
+  $("status").textContent=`ROUND ${currentRound}`;
+  players.forEach(p=>{p.status="PLAYING";p.time=0;p.score=0;});
+  newPuzzle();
+  render();
+  startCountdown();
+}
+
+function showFinalResults(){
+  const old=$("finalResults"); if(old) old.remove();
+  const box=document.createElement("div");
+  box.id="finalResults";
+  box.className="notice";
+  box.style.marginTop="12px";
+  const ranking=[...players].sort((a,b)=>(b.roundPoints||0)-(a.roundPoints||0));
+  box.innerHTML=`<b>🏆 最終結果（${totalRounds}R）</b><br>`+
+    ranking.map((p,i)=>`${i+1}. ${p.name}：${p.roundPoints||0}点`).join("<br>");
+  document.querySelector(".boardCard")?.appendChild(box);
+}
+
 async function startGame(){
   name=$("nameInput").value.trim()||"プレイヤー";
   mode=document.querySelector(".modeBtn.active").dataset.mode;
@@ -353,6 +603,7 @@ async function startGame(){
     {name:"かぷ",color:"#64df64",status:"プレイ中"},
     {name:"ぴよまま",color:"#c084fc",status:"プレイ中"}
   ];
+  currentRound=1; roundFinished=false; gameOver=false; roundResults=[];
   newPuzzle();
   penaltyPoints=0; $("score").textContent="500";
   renderPlayers();
@@ -367,23 +618,31 @@ async function startGame(){
   cd.textContent="START!";
   await new Promise(r=>setTimeout(r,650));
   cd.style.display="none";
-  started=true;startAt=performance.now();$("status").textContent="プレイ中";$("message").textContent="完成を目指そう！";tick();
+  started=true;startAt=performance.now();$("status").textContent="プレイ中";$("message").textContent="ゲーム開始！";tick();
 }
 document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll(".modeBtn").forEach(x=>x.classList.remove("active","dark"));
   b.classList.add("active"); mode=b.dataset.mode;
   document.querySelectorAll(".modeBtn").forEach(x=>{if(!x.classList.contains("active"))x.classList.add("dark")});
 }));
-$("startBtn").onclick=startGame;
-$("modeBtn").onclick=()=>{
-  $("message").textContent="マスを押すたびに「ミャクミャク→旗→空白」と切り替わります";
+$("startBtn").onclick=showStartConfirmation;
+$("confirmStartBtn").onclick=()=>{
+  $("startConfirm").classList.add("hidden");
+  startGame();
 };
-$("checkBtn").onclick=()=>{
-  if(mode==="watch")return;
-  if(!started||gameOver)return;
-  if(isComplete())finish();
-  else $("message").textContent="まだ完成していません。各エリアに1体ずつ配置してください。";
-};
+$("cancelStartBtn").onclick=cancelStartConfirmation;
+
+setupChat();
+
+document.querySelectorAll(".roundBtn").forEach(b=>{
+  b.addEventListener("click",()=>selectRounds(Number(b.dataset.round)));
+});
+selectRounds(3);
+
+$("forceNextBtn")?.addEventListener("click",()=>{
+  if(started && !roundFinished && !gameOver) finishRound(true);
+});
+
 $("againBtn").onclick=()=>{
   $("result").style.display="none";gameOver=false;started=false;
   participants.forEach(p=>{if(p.name===name){p.status="プレイ中";p.time=null}});
