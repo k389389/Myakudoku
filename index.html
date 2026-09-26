@@ -21,7 +21,7 @@ button{cursor:pointer}
 .modeBadge{background:#e94c35;border-radius:8px;padding:6px 11px;font-weight:800}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:12px}
 .card{background:linear-gradient(180deg,#173f68,#0d2948);border:2px solid #35658e;border-radius:16px;box-shadow:0 10px 30px #0006}
-.boardCard{padding:10px}
+.boardCard{padding:10px;position:relative}
 .boardWrap{width:min(88vw,720px);margin:auto}
 .board{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(10,minmax(0,1fr));width:100%;height:100%;aspect-ratio:1/1;border:2px solid #071427;background:#071427;touch-action:manipulation}
 .cell{position:relative;border:1px solid #111827;display:flex;width:100%;height:100%;min-width:0;min-height:0;align-items:center;justify-content:center;min-width:0;overflow:hidden;user-select:none}
@@ -81,21 +81,21 @@ button{cursor:pointer}
 .entryChat{margin-top:14px;text-align:left}
 .entryChat .chatBox{background:#fff}
 .entryChatTitle{font-size:12px;font-weight:900;color:#55708a;margin-bottom:5px}
-.chatFloatWrap{position:relative;height:72px;margin:0 0 6px;overflow:hidden;pointer-events:none}
+.chatFloatWrap{position:absolute;left:10px;right:10px;top:10px;bottom:10px;overflow:hidden;pointer-events:none;z-index:10}
 .chatFloat{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .chatBubble{position:absolute;left:10px;bottom:-10px;max-width:calc(100% - 20px);padding:7px 12px;border-radius:16px;background:#fff;color:#17283b;font-weight:800;font-size:13px;box-shadow:0 3px 10px #0004;animation:chatFloatUp 4s ease-out forwards}
 .chatBubble::before{content:"";position:absolute;left:14px;bottom:-5px;width:10px;height:10px;background:#fff;transform:rotate(45deg)}
 @keyframes chatFloatUp{
-  0%{transform:translateY(0);opacity:0}
+  0%{bottom:-10px;opacity:0}
   8%{opacity:1}
   75%{opacity:1}
-  100%{transform:translateY(-82px);opacity:0}
+  100%{bottom:calc(100% + 10px);opacity:0}
 }
 .confirmBox{margin-top:12px;padding:12px;border-radius:12px;background:#102d4d;border:1px solid #46749a}
 .confirmBox strong{display:block;margin-bottom:8px;color:#ffd52e}
 .confirmActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @media(max-width:800px){
-  .chatFloatWrap{height:68px}
+  .chatFloatWrap{left:8px;right:8px;top:8px;bottom:8px}
 }
 
 
@@ -165,7 +165,7 @@ button{cursor:pointer}
 .scoreStat{flex:1;min-width:0;text-align:center}
 .clearMyakBtn{flex:0 0 112px;min-height:42px;border:2px solid #ffe37a;border-radius:11px;background:#f2c94c;color:#16243b;font-weight:900;font-size:13px;line-height:1.15;box-shadow:0 3px 0 #9b7615;cursor:pointer}
 .clearMyakBtn:active{transform:translateY(2px);box-shadow:0 1px 0 #9b7615}
-.chatFloatWrap{position:relative;height:72px;margin:7px 0 0;overflow:hidden;pointer-events:none}
+.chatFloatWrap{position:absolute;left:10px;right:10px;top:10px;bottom:10px;overflow:hidden;pointer-events:none;z-index:10}
 .chatFloat{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .chatBubble{position:absolute;left:10px;bottom:-10px;max-width:calc(100% - 20px);padding:7px 12px;border-radius:16px;background:#fff;color:#17283b;font-weight:800;font-size:13px;box-shadow:0 3px 10px #0004;animation:chatFloatUp 4s ease-out forwards}
 .chatBubble::before{content:"";position:absolute;left:14px;bottom:-5px;width:10px;height:10px;background:#fff;transform:rotate(45deg)}
@@ -225,14 +225,6 @@ button{cursor:pointer}
     </div>
 
     <button class="btn gold" id="startBtn" style="width:100%;font-size:18px;margin-top:12px">ゲーム開始！</button>
-    <div id="startConfirm" class="confirmBox hidden">
-      <strong>「ゲーム開始！」でゲームを開始します。</strong>
-      <div class="confirmActions">
-        <button class="btn gold" id="confirmStartBtn">はい、始めます！</button>
-        <button class="btn dark" id="cancelStartBtn">まだです</button>
-      </div>
-    </div>
-    <div class="notice" style="margin-top:12px">ゲーム開始前もチャットできます。準備ができたら「ゲーム開始！」を押して確認してからスタートします。誰でも進行ボタンを押せます。</div>
   </div>
 </div>
 
@@ -331,7 +323,7 @@ button{cursor:pointer}
 <div class="forceNext" style="max-width:900px;margin:14px auto 30px;padding:0 16px;">
   <button id="forceNextBtn" class="btn dark">⏭ 誰かが止まったとき：強制的にラウンド結果へ</button>
   <div class="bottomActions">
-    <button id="restartGameBtn" class="btn gold">🔄 ゲームをやり直す</button>
+    <button id="restartGameBtn" class="btn gold">🔄 もう一度始める</button>
     <button id="backWaitingBtn" class="btn dark">🏠 待機画面に戻る</button>
   </div>
 </div>
@@ -500,8 +492,6 @@ function setupChat(){
   }));
 }
 function selectRounds(n){totalRounds=n;document.querySelectorAll(".roundBtn").forEach(b=>b.classList.toggle("selected",Number(b.dataset.round)===n));$("roundInfo").textContent=`現在：${n}R`;if(dbReady())update(ref(db(),`rooms/${ROOM_ID}/game`),{totalRounds:n}).catch(()=>{})}
-function showStartConfirmation(){if(mode!=="play")return;$("startConfirm").classList.remove("hidden");$("startBtn").classList.add("hidden")}
-function cancelStartConfirmation(){$("startConfirm").classList.add("hidden");$("startBtn").classList.remove("hidden")}
 async function registerPlayer(){
   if(!dbReady()) return false;
   name=$("nameInput").value.trim()||"プレイヤー";
@@ -530,7 +520,7 @@ async function registerSpectator(){
 function startCountdown(){const cd=$("countdown");cd.style.display="flex";const start=Date.now();clearInterval(countdownTimer);countdownTimer=setInterval(()=>{const d=Date.now()-start;const n=3-Math.floor(d/1000);if(n>0){cd.textContent=n}else{cd.textContent="START!";if(d>3400){clearInterval(countdownTimer);cd.style.display="none";started=true;localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick()}}},100)}
 function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";startCountdown();return}if(phase==="PLAYING"){if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});return}if(phase==="FINAL"){started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
-function showRoundResult(result){const resultList=$("resultList");resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.points}点 / ${format(x.timeMs||0)}</span></div>`).join("");$("result").style.display="flex";if(result.nextReady)$("againBtn").textContent=currentRound>=totalRounds?"最終結果を見る":`ROUND ${currentRound+1}へ`}
+function showRoundResult(result){const resultList=$("resultList");resultList.innerHTML=Object.values(result).sort((a,b)=>a.rank-b.rank).map(x=>`<div class="rank"><b>${x.rank}位　${escapeHtml(x.name)}</b><span>${x.points}点 / ${format(x.timeMs||0)}</span></div>`).join("");$("result").style.display="flex";if(result.nextReady)$("againBtn").textContent=currentRound<totalRounds?"次のラウンドへ":"最終結果を見る"}
 function showFinalResults(totals){const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="ゲーム画面に戻る"}
 async function finalizeRound(force=false){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
@@ -631,9 +621,7 @@ $("joinBtn").onclick=async()=>{
     $("joinStatus").textContent=`参加エラー（${e.code||e.message||"unknown"}）`;
   }
 };
-$("startBtn").onclick=showStartConfirmation;
-$("confirmStartBtn").onclick=async()=>{cancelStartConfirmation();if(mode!=="play"){return}if(!localPlayer||localPlayer.mode!=="play")await registerPlayer();if(localPlayer?.mode==="play")await startGameOnline();};
-$("cancelStartBtn").onclick=cancelStartConfirmation;
+$("startBtn").onclick=async()=>{if(mode!=="play"){return}if(!localPlayer||localPlayer.mode!=="play")await registerPlayer();if(localPlayer?.mode==="play")await startGameOnline();};
 document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".modeBtn").forEach(x=>x.classList.remove("active","dark"));b.classList.add("active");mode=b.dataset.mode;$("startBtn").textContent=mode==="watch"?"観覧を開始":"ゲーム開始！";if(dbReady()&&$("nameInput").value.trim()){if(mode==="play")await registerPlayer();else await registerSpectator();}}));
 document.querySelectorAll(".roundBtn").forEach(b=>b.addEventListener("click",()=>selectRounds(Number(b.dataset.round))));selectRounds(3);
 $("forceNextBtn")?.addEventListener("click",forceNextRound);
