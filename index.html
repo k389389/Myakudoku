@@ -328,6 +328,16 @@ const dbReady=()=>window.myakudokuFirebase?.db && window.myakudokuFirebase?.uid;
 const db=()=>window.myakudokuFirebase.db;
 const uid=()=>window.myakudokuFirebase.uid;
 const rdb=()=>window.myakudokuFirebase;
+// Firebaseのmoduleスコープにある関数を、ゲーム本体のscriptから安全に呼べるようにする
+const ref=(...args)=>window.myakudokuFirebase.ref(...args);
+const set=(...args)=>window.myakudokuFirebase.set(...args);
+const update=(...args)=>window.myakudokuFirebase.update(...args);
+const push=(...args)=>window.myakudokuFirebase.push(...args);
+const onValue=(...args)=>window.myakudokuFirebase.onValue(...args);
+const onDisconnect=(...args)=>window.myakudokuFirebase.onDisconnect(...args);
+const serverTimestamp=(...args)=>window.myakudokuFirebase.serverTimestamp(...args);
+const get=(...args)=>window.myakudokuFirebase.get(...args);
+const runTransaction=(...args)=>window.myakudokuFirebase.runTransaction(...args);
 
 const N=10;
 const palette=["#fff477","#6cf06c","#69e5d0","#69d7ef","#6d8ff0","#a06df0","#d76df0","#ff6fb4","#ffd080","#ff7777"];
@@ -376,7 +386,7 @@ async function registerPlayer(){
   await set(playerRef,p);
   await onDisconnect(playerRef).remove();
   const hostRef=ref(db(),`rooms/${ROOM_ID}/hostUid`);
-  const tx=await rdb().runTransaction(hostRef,current=>current||uid());
+  const tx=await runTransaction(hostRef,current=>current||uid());
   const isHost=tx.snapshot.val()===uid();
   await update(playerRef,{host:isHost});
   localPlayer={...p,host:isHost};
