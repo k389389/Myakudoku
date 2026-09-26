@@ -544,6 +544,14 @@ function showRoundResult(result){const resultList=$("resultList");resultList.inn
 function showFinalResults(totals){const arr=Object.values(totals).sort((a,b)=>(b.points||0)-(a.points||0));$("resultList").innerHTML=arr.map((x,i)=>`<div class="rank"><b>${i+1}位　${escapeHtml(x.name)}</b><span>${x.points||0}点</span></div>`).join("");$("result").style.display="flex";$('againBtn').textContent="ゲーム画面に戻る"}
 async function finalizeRound(force=false){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
+  // 通常時は、3人以上なら3位が決まるまで結果画面へ進めない。
+  // 1～2人のラウンドだけは、全員クリアで結果確定とする。
+  if(!force){
+    const playNow=Object.values(participants).filter(p=>p.mode==="play");
+    const clearedNow=playNow.filter(p=>p.status==="CLEAR").length;
+    const required=playNow.length<=2?playNow.length:3;
+    if(playNow.length===0||clearedNow<required)return;
+  }
   roundFinalizeInProgress=true;
   let autoAdvance=false;
   try{
