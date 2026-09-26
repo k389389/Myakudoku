@@ -590,7 +590,7 @@ function startCountdown(){
     }
   },100)
 }
-function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";currentGamePhase=phase;if(phase!=="FINAL")finalResultDismissed=false;lastGamePhase=phase;if(phase!=="WAITING"&&(()=>{try{return sessionStorage.getItem("expo_waiting")==="1"}catch(e){return false}})()){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);$("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";return}if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){clearTimeout(resultAdvanceTimer);penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";$("result").style.display="none";startCountdown();return}if(phase==="PLAYING"){clearTimeout(resultAdvanceTimer);if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});scheduleNextRound(g);return}if(phase==="FINAL"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);if(!finalResultDismissed)showFinalResults(g.totals||{});return}}
+function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";currentGamePhase=phase;if(phase!=="FINAL")finalResultDismissed=false;lastGamePhase=phase;if(phase!=="WAITING"&&(()=>{try{return sessionStorage.getItem("expo_waiting")==="1"}catch(e){return false}})()){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);$("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";return}if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){clearTimeout(resultAdvanceTimer);clearTimeout(countdownTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);$("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){clearTimeout(resultAdvanceTimer);penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";$("result").style.display="none";startCountdown();return}if(phase==="PLAYING"){clearTimeout(resultAdvanceTimer);if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&!localStartAt)localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});scheduleNextRound(g);return}if(phase==="FINAL"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);if(!finalResultDismissed)showFinalResults(g.totals||{});return}}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
 function showRoundResult(result){
   const resultList=$("resultList");
@@ -717,8 +717,19 @@ async function restartWholeGame(){
 async function returnToWaiting(){
   if(!dbReady())return;
   try{sessionStorage.setItem("expo_waiting","1")}catch(e){}
-  clearTimeout(autoAdvanceTimer);roundFinalizeInProgress=false;started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
-  if(mode==="play")await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"WAITING",board:".".repeat(100),timeMs:0,score:0,clearAt:null,clearRound:null}).catch(()=>{});
+  clearTimeout(autoAdvanceTimer);clearTimeout(resultAdvanceTimer);clearTimeout(countdownTimer);roundFinalizeInProgress=false;started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
+  const updates={};
+  for(const p of Object.values(participants)){
+    if(!p?.uid)continue;
+    updates[`rooms/${ROOM_ID}/players/${p.uid}/status`]=p.mode==="watch"?"WATCHING":"WAITING";
+    updates[`rooms/${ROOM_ID}/players/${p.uid}/board`]=".".repeat(100);
+    updates[`rooms/${ROOM_ID}/players/${p.uid}/timeMs`]=0;
+    updates[`rooms/${ROOM_ID}/players/${p.uid}/score`]=0;
+    updates[`rooms/${ROOM_ID}/players/${p.uid}/clearAt`]=null;
+    updates[`rooms/${ROOM_ID}/players/${p.uid}/clearRound`]=null;
+  }
+  updates[`rooms/${ROOM_ID}/game`]={phase:"WAITING",round:1,totalRounds,puzzle:null,countdownAt:null,roundStartAt:null,result:null,totals:null,resultAt:null,forced:false};
+  await update(ref(db()),updates).catch(e=>console.error("return to waiting error",e));
   $("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";
 }
 async function forceNextRound(){if(!dbReady()||!started||roundFinished)return;await finalizeRound(true)}
