@@ -205,52 +205,8 @@ button{cursor:pointer}
     <h1><span class="logoLetters"><span class="logoChar c0">M</span><span class="logoChar c1">y</span><span class="logoChar c2">a</span><span class="logoChar c3">k</span><span class="logoChar c4">u</span><span class="logoChar c5">d</span><span class="logoChar c6">o</span><span class="logoChar c7">k</span><span class="logoChar c8">u</span><span class="logoChar c9">!</span></span></h1>
     <p>10×10の盤面で、ミャクミャクを完成させよう。</p>
     <input id="nameInput" class="name" maxlength="12" placeholder="プレイヤー名を入力">
-    <div class="modeRow">
-      <button class="btn modeBtn active" data-mode="play">プレイヤーで参加</button>
-      <button class="btn dark modeBtn" data-mode="watch">観覧モード</button>
-    </div>
     <button class="btn" id="joinBtn" style="width:100%;margin-top:8px">この名前で参加する</button>
     <div id="joinStatus" class="small" style="margin-top:6px">名前を入力して参加してください</div>
-    <div class="roundSelect">
-      <div class="roundSelectTitle">何ラウンド遊びますか？</div>
-      <div class="roundButtons" id="roundButtons">
-        <button class="roundBtn" data-round="1">1R</button>
-        <button class="roundBtn" data-round="2">2R</button>
-        <button class="roundBtn" data-round="3">3R</button>
-        <button class="roundBtn" data-round="4">4R</button>
-        <button class="roundBtn" data-round="5">5R</button>
-        <button class="roundBtn" data-round="6">6R</button>
-        <button class="roundBtn" data-round="7">7R</button>
-        <button class="roundBtn" data-round="8">8R</button>
-        <button class="roundBtn" data-round="9">9R</button>
-        <button class="roundBtn" data-round="10">10R</button>
-      </div>
-      <div id="roundInfo" class="roundInfo">現在：3R</div>
-    </div>
-
-    <div class="notice" style="margin-top:10px;text-align:left">
-      <b>参加者</b>
-      <div id="entryPlayers" style="margin-top:6px">Firebase接続中…</div>
-    </div>
-
-    <div class="entryChat">
-      <div class="entryChatTitle">みんなのチャット</div>
-      <div class="chatBox">
-        <div class="chatInputRow">
-          <input id="entryChatInput" class="chatInput" maxlength="60" placeholder="メッセージを入力">
-          <button id="entryChatSend" class="chatSend">送信</button>
-        </div>
-        <div class="chatEmoji">
-          <button data-chat="🍄">🍄</button><button data-chat="😁">😁</button>
-          <button data-chat="😍">😍</button><button data-chat="🤣">🤣</button>
-          <button data-chat="😰">😰</button><button data-chat="👏">👏</button>
-          <button data-chat="🔥">🔥</button>
-        </div>
-      </div>
-      <div id="entryChatLog" class="notice" style="margin-top:7px;max-height:90px;overflow:auto;text-align:left"></div>
-    </div>
-
-    <button class="btn gold" id="startBtn" style="width:100%;font-size:18px;margin-top:12px">ゲーム開始！</button>
   </div>
 </div>
 
@@ -329,11 +285,6 @@ button{cursor:pointer}
         <div id="players" class="players"></div>
       </div>
 
-      <div id="watchBox" class="hidden">
-        <div class="small">観覧するプレイヤー</div>
-        <select id="watchSelect" class="name" style="margin-top:5px"></select>
-      </div>
-
       <div class="rules">
         <strong>ルール</strong><br>
         ・10×10マス固定<br>
@@ -347,10 +298,27 @@ button{cursor:pointer}
 </div>
 
 <div class="forceNext" style="max-width:900px;margin:14px auto 30px;padding:0 16px;">
+  <div class="roundSelect" style="margin:0 0 12px;">
+    <div class="roundSelectTitle">ラウンド変更</div>
+    <div class="roundButtons" id="roundButtons">
+      <button class="roundBtn" data-round="1">1R</button>
+      <button class="roundBtn" data-round="2">2R</button>
+      <button class="roundBtn" data-round="3">3R</button>
+      <button class="roundBtn" data-round="4">4R</button>
+      <button class="roundBtn" data-round="5">5R</button>
+      <button class="roundBtn" data-round="6">6R</button>
+      <button class="roundBtn" data-round="7">7R</button>
+      <button class="roundBtn" data-round="8">8R</button>
+      <button class="roundBtn" data-round="9">9R</button>
+      <button class="roundBtn" data-round="10">10R</button>
+    </div>
+    <div id="roundInfo" class="roundInfo">現在：3R</div>
+    <button id="saveRoundBtn" class="btn gold" style="width:100%;margin-top:10px">💾 保存してスタート</button>
+    <div id="roundSaveStatus" class="small" style="margin-top:6px;text-align:center"></div>
+  </div>
   <button id="forceNextBtn" class="btn dark">⏭ 誰かが止まったとき：強制的にラウンド結果へ</button>
   <div class="bottomActions">
     <button id="restartGameBtn" class="btn gold">🔄 もう一度始める</button>
-    <button id="backWaitingBtn" class="btn dark">🏠 待機画面に戻る</button>
   </div>
 </div>
 
@@ -464,7 +432,7 @@ function isComplete(){let n=0;for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(placed[
 function encodeBoard(){let s="";for(let r=0;r<N;r++)for(let c=0;c<N;c++)s+=placed[r][c]?"M":flags[r][c]?"F":".";return s}
 function decodeBoard(s){placed=Array.from({length:N},()=>Array(N).fill(false));flags=Array.from({length:N},()=>Array(N).fill(false));for(let i=0;i<N*N;i++){const r=Math.floor(i/N),c=i%N;if(s?.[i]==="M")placed[r][c]=true;if(s?.[i]==="F")flags[r][c]=true}}
 function countPlaced(){return placed.flat().filter(Boolean).length}
-function tapCell(r,c,el){if(mode!=="play"||!started||roundFinished||gameOver)return;if(!placed[r][c]&&!flags[r][c]){if(!canPlace(r,c)){penaltyPoints+=5;updateScore();el.classList.add("invalid");setTimeout(()=>el.classList.remove("invalid"),450);sendChatLocal("⚠️ 置けないマス −5点");return}placed[r][c]=true;flags[r][c]=false}else if(placed[r][c]){placed[r][c]=false;flags[r][c]=true}else{flags[r][c]=false;placed[r][c]=false}render();saveMyBoard();if(isComplete())submitClear()}
+function tapCell(r,c,el){if(!started||roundFinished||gameOver)return;if(!placed[r][c]&&!flags[r][c]){if(!canPlace(r,c)){penaltyPoints+=5;updateScore();el.classList.add("invalid");setTimeout(()=>el.classList.remove("invalid"),450);sendChatLocal("⚠️ 置けないマス −5点");return}placed[r][c]=true;flags[r][c]=false}else if(placed[r][c]){placed[r][c]=false;flags[r][c]=true}else{flags[r][c]=false;placed[r][c]=false}render();saveMyBoard();if(isComplete())submitClear()}
 function ensureAudio(){
   try{
     if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
@@ -505,7 +473,7 @@ function showClearEffect(playerName){
 }
 function updateScore(){const elapsed=Date.now()-localStartAt;$('time').textContent=format(elapsed);$('score').textContent=String(Math.max(0,500-Math.floor(elapsed/1000)-penaltyPoints))}
 async function clearAllMyak(){
-  if(mode!=="play"||!started||roundFinished||gameOver)return;
+  if(!started||roundFinished||gameOver)return;
   let changed=false;
   for(let r=0;r<N;r++)for(let c=0;c<N;c++){
     if(placed[r][c] || flags[r][c]){
@@ -531,8 +499,8 @@ async function submitClear(){
   await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"CLEAR",clearAt:serverTimestamp(),clearRound:currentRound,timeMs:elapsed,score,board:encodeBoard()}).catch(()=>{});
   started=false;cancelAnimationFrame(raf);$('status').textContent="クリア！";
 }
-function renderPlayers(){const arr=Object.values(participants).filter(Boolean);const box=$("players");box.innerHTML="";arr.filter(p=>p.mode==="play").sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(p=>{const row=document.createElement("div");row.className="player";const left=document.createElement("span");left.innerHTML=`<span class="dot" style="background:${p.color||"#35c9ff"}"></span>${escapeHtml(p.name)}`;const right=document.createElement("span");right.className="small";right.textContent=p.status==="CLEAR"?`CLEAR! ${format(p.timeMs||0)} / ${p.score||0}点`:p.status==="PLAYING"?"プレイ中":"待機";row.append(left,right);box.appendChild(row)});const sel=$("watchSelect");if(sel){sel.innerHTML="";arr.filter(p=>p.mode==="play").forEach(p=>{const o=document.createElement("option");o.value=p.uid;o.textContent=p.name;sel.appendChild(o)});if(!selectedWatchUid&&sel.value)selectedWatchUid=sel.value;const wp=participants[selectedWatchUid];if(mode==="watch"&&wp?.board){decodeBoard(wp.board);render()}}}
-function renderEntryPlayers(){const el=$("entryPlayers");if(!el)return;const ps=Object.values(participants);const pl=ps.filter(p=>p.mode==="play");const wa=ps.filter(p=>p.mode==="watch");el.innerHTML=`<div>🟢 プレイヤー：${pl.length}人</div>`+(pl.length?pl.map(p=>`<div style="padding-left:10px">・${escapeHtml(p.name)}</div>`).join(""):"")+`<div style="margin-top:4px">👀 観覧：${wa.length}人</div>`}
+function renderPlayers(){const arr=Object.values(participants).filter(Boolean);const box=$("players");if(!box)return;box.innerHTML="";arr.filter(p=>p.mode!=="watch").sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(p=>{const row=document.createElement("div");row.className="player";const left=document.createElement("span");left.innerHTML=`<span class="dot" style="background:${p.color||"#35c9ff"}"></span>${escapeHtml(p.name)}`;const right=document.createElement("span");right.className="small";right.textContent=p.status==="CLEAR"?`CLEAR! ${format(p.timeMs||0)} / ${p.score||0}点`:p.status==="PLAYING"?"プレイ中":"参加中";row.append(left,right);box.appendChild(row)})}
+function renderEntryPlayers(){return}
 function renderEntryChat(msg){const log=$("entryChatLog");if(!log)return;const line=document.createElement("div");line.style.margin="3px 0";line.innerHTML=`<b>${escapeHtml(msg.name)}：</b>${escapeHtml(msg.text)}`;log.appendChild(line);log.scrollTop=log.scrollHeight}
 function renderFloatChat(msg){const wrap=$("chatFloat");if(!wrap)return;const bubble=document.createElement("div");bubble.className="chatBubble";bubble.textContent=`${msg.name}：${msg.text}`;bubble.style.left=(10+Math.floor(Math.random()*35))+"px";wrap.appendChild(bubble);setTimeout(()=>bubble.remove(),4100)}
 function sendChatLocal(message){const text=String(message||"").trim();if(!text||!dbReady())return;push(ref(db(),`rooms/${ROOM_ID}/chat`),{name:name||"プレイヤー",uid:uid(),text:text,createdAt:serverTimestamp()}).catch(()=>{})}
@@ -547,30 +515,19 @@ function setupChat(){
     if(reaction) sendChatLocal(reaction);
   }));
 }
-function selectRounds(n){totalRounds=n;document.querySelectorAll(".roundBtn").forEach(b=>b.classList.toggle("selected",Number(b.dataset.round)===n));$("roundInfo").textContent=`現在：${n}R`;if(dbReady())update(ref(db(),`rooms/${ROOM_ID}/game`),{totalRounds:n}).catch(()=>{})}
+function selectRounds(n){totalRounds=Math.max(1,Math.min(10,Number(n)||3));document.querySelectorAll(".roundBtn").forEach(b=>b.classList.toggle("selected",Number(b.dataset.round)===totalRounds));if($("roundInfo"))$("roundInfo").textContent=`選択：${totalRounds}R`;if($("roundSaveStatus"))$("roundSaveStatus").textContent=""}
 async function registerPlayer(){
-  try{sessionStorage.removeItem("expo_waiting")}catch(e){}
   if(!dbReady()) return false;
   name=$("nameInput").value.trim();
   if(!name){$("joinStatus").textContent="⚠️ 名前を入力してから参加してください";$("nameInput").focus();return false;}
   const playerRef=ref(db(),`rooms/${ROOM_ID}/players/${uid()}`);
   const existing=participants[uid()];
-  const p={uid:uid(),name,mode,status:"WAITING",color:existing?.color||"#35c9ff",host:false,roundPoints:existing?.roundPoints||0,joinedAt:serverTimestamp()};
+  const p={uid:uid(),name,mode:"play",status:(existing?.status||"WAITING"),color:existing?.color||"#35c9ff",host:false,roundPoints:existing?.roundPoints||0,joinedAt:existing?.joinedAt||serverTimestamp()};
   await set(playerRef,p);
   await onDisconnect(playerRef).remove();
   localPlayer={...p,host:false};
-  $("joinStatus").textContent="🟢 プレイヤーとして参加中（誰でもゲーム開始できます）";
-  return true;
-}
-async function registerSpectator(){
-  try{sessionStorage.removeItem("expo_waiting")}catch(e){}
-  if(!dbReady()) return false;
-  name=$("nameInput").value.trim();
-  if(!name){$("joinStatus").textContent="⚠️ 名前を入力してから観覧してください";$("nameInput").focus();return false;}
-  const playerRef=ref(db(),`rooms/${ROOM_ID}/players/${uid()}`);
-  const p={uid:uid(),name,mode:"watch",status:"WATCHING",color:"#9aa7b5",host:false,roundPoints:0,joinedAt:serverTimestamp()};
-  await set(playerRef,p); await onDisconnect(playerRef).remove(); localPlayer=p;
-  $("joinStatus").textContent="👀 観覧モードで参加中";
+  $("joinStatus").textContent="🟢 プレイヤーとして参加中";
+  $("startScreen").style.display="none";
   return true;
 }
 function startCountdown(){
@@ -585,7 +542,38 @@ function startCountdown(){
     }
   },100)
 }
-function handleGameState(g){if(!g)return;totalRounds=g.totalRounds||3;currentRound=g.round||1;const phase=g.phase||"WAITING";lastGamePhase=phase;if(phase!=="WAITING"&&(()=>{try{return sessionStorage.getItem("expo_waiting")==="1"}catch(e){return false}})()){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);$("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";return}if(g.puzzle?.solution&&g.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}if(phase==="WAITING"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;$("status").textContent="エントリー待ち";return}if(phase==="COUNTDOWN"){clearTimeout(resultAdvanceTimer);penaltyPoints=0;localStartAt=0;localStartRound=0;$("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;$("startScreen").style.display="none";$("result").style.display="none";startCountdown();return}if(phase==="PLAYING"){clearTimeout(resultAdvanceTimer);if($("startScreen").style.display!=="none")$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;if(g.roundStartAt&&localStartRound!==currentRound){localStartAt=Number(g.roundStartAt);localStartRound=currentRound;}$("status").textContent=`ROUND ${currentRound}`;tick();return}if(phase==="ROUND_RESULT"){started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});scheduleNextRound(g);return}if(phase==="FINAL"){clearTimeout(resultAdvanceTimer);started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return}}
+function handleGameState(g){
+  totalRounds=g?.totalRounds||totalRounds||3;
+  currentRound=g?.round||1;
+  const phase=g?.phase||"READY";
+  lastGamePhase=phase;
+  if(g?.puzzle?.solution&&g?.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}
+  if(phase==="READY"){
+    clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
+    $("status").textContent="ラウンドを選んで保存してください";
+    return;
+  }
+  if(phase==="COUNTDOWN"){
+    clearTimeout(resultAdvanceTimer);penaltyPoints=0;localStartAt=0;localStartRound=0;
+    $("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);
+    started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;
+    $("startScreen").style.display="none";$("result").style.display="none";startCountdown();return;
+  }
+  if(phase==="PLAYING"){
+    clearTimeout(resultAdvanceTimer);$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;
+    if(g.roundStartAt&&localStartRound!==currentRound){
+      localStartAt=Number(g.roundStartAt);localStartRound=currentRound;penaltyPoints=0;
+      newPuzzle(solution,regions);
+    }
+    $("status").textContent=`ROUND ${currentRound}`;tick();return;
+  }
+  if(phase==="ROUND_RESULT"){
+    started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{});scheduleNextRound(g);return;
+  }
+  if(phase==="FINAL"){
+    clearTimeout(resultAdvanceTimer);started=false;roundFinished=true;gameOver=true;cancelAnimationFrame(raf);showFinalResults(g.totals||{});return;
+  }
+}
 async function promoteAndStartPlaying(g){if(g.phase!=="COUNTDOWN"||!g.countdownAt)return;const elapsed=Date.now()-g.countdownAt;if(elapsed>=3500){await update(ref(db(),`rooms/${ROOM_ID}/game`),{phase:"PLAYING",roundStartAt:serverTimestamp()}).catch(()=>{})}}
 function showRoundResult(result){
   $("returnGameBtn").style.display="none";
@@ -650,21 +638,33 @@ async function watchClearCount(){
   const need=play.length<=2?1:3;
   if(play.length>0&&cleared>=Math.min(need,play.length))await finalizeRound(false);
 }
-async function startGameOnline(){
-  if(!dbReady()||mode!=="play")return;
-  const sol=makeSolution(),reg=makeRegions(sol);
-  const updates={};
-  for(const p of Object.values(participants).filter(p=>p.mode==="play")){
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/status`]="WAITING";
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/timeMs`]=0;
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/score`]=0;
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/clearAt`]=null;
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/clearRound`]=null;
-    updates[`rooms/${ROOM_ID}/players/${p.uid}/board`]=".".repeat(100);
-  }
-  updates[`rooms/${ROOM_ID}/game`]={phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,resultAt:null,forced:false};
-  roundFinished=false; gameOver=false;
-  await update(ref(db()),updates).catch(()=>{});
+async function saveRoundsAndStart(){
+  if(!dbReady())return;
+  if(!localPlayer||localPlayer.mode!=="play"){const ok=await registerPlayer();if(!ok)return;}
+  const status=$("roundSaveStatus");
+  const gameRef=ref(db(),`rooms/${ROOM_ID}/game`);
+  try{
+    const tx=await runTransaction(gameRef,current=>{
+      const phase=current?.phase||"READY";
+      if(phase==="COUNTDOWN"||phase==="PLAYING"||phase==="ROUND_RESULT")return;
+      const sol=makeSolution(),reg=makeRegions(sol);
+      return {phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,resultAt:null,forced:false};
+    });
+    if(!tx.committed){if(status)status.textContent="⚠️ すでにゲームが進行中です";return;}
+    const updates={};
+    const players=Object.values(participants).filter(p=>p?.mode==="play");
+    for(const p of players){
+      updates[`rooms/${ROOM_ID}/players/${p.uid}/status`]=p.uid===uid()?"WAITING":"WAITING";
+      updates[`rooms/${ROOM_ID}/players/${p.uid}/timeMs`]=0;
+      updates[`rooms/${ROOM_ID}/players/${p.uid}/score`]=0;
+      updates[`rooms/${ROOM_ID}/players/${p.uid}/clearAt`]=null;
+      updates[`rooms/${ROOM_ID}/players/${p.uid}/clearRound`]=null;
+      updates[`rooms/${ROOM_ID}/players/${p.uid}/roundPoints`]=0;
+      updates[`rooms/${ROOM_ID}/players/${p.uid}/board`]=".".repeat(100);
+    }
+    await update(ref(db()),updates);
+    if(status)status.textContent=`${totalRounds}Rでゲームを開始します！`;
+  }catch(e){console.error("round save/start error",e);if(status)status.textContent="⚠️ 開始できませんでした。もう一度保存してください"}
 }
 async function startNextRoundOnline(){
   if(!dbReady())return;
@@ -712,31 +712,22 @@ async function restartWholeGame(){
 }
 async function returnToWaiting(){
   if(!dbReady())return;
-  try{sessionStorage.setItem("expo_waiting","1")}catch(e){}
   clearTimeout(autoAdvanceTimer);roundFinalizeInProgress=false;started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
-  if(mode==="play")await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"WAITING",board:".".repeat(100),timeMs:0,score:0,clearAt:null,clearRound:null}).catch(()=>{});
-  $("result").style.display="none";$("startScreen").style.display="flex";$("status").textContent="待機中";
+  await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"WAITING",board:".".repeat(100),timeMs:0,score:0,clearAt:null,clearRound:null}).catch(()=>{});
+  $("result").style.display="none";$("status").textContent="ラウンドを選んで保存してください";
 }
 async function forceNextRound(){if(!dbReady()||!started||roundFinished)return;await finalizeRound(true)}
 function subscribeFirebase(){if(!dbReady())return;firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/players`),snap=>{participants=snap.val()||{};renderPlayers();renderEntryPlayers();const me=participants[uid()];if(me)localPlayer=me;watchClearCount()}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/game`),snap=>{const g=snap.val();handleGameState(g);if(g?.phase==="COUNTDOWN")promoteAndStartPlaying(g)}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/chat`),snap=>{const data=snap.val()||{};Object.entries(data).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).slice(-50).forEach(([id,msg])=>{if(chatSeen[id])return;chatSeen[id]=true;renderEntryChat(msg);renderFloatChat(msg)})}));}
 
 $("joinBtn").onclick=async()=>{
-  if(!$("nameInput").value.trim()){}
-  if(!$("nameInput").value.trim()){$("joinStatus").textContent="⚠️ 名前を入力してから参加してください";$("nameInput").focus();return}
+  if(!$('nameInput').value.trim()){$("joinStatus").textContent="⚠️ 名前を入力してから参加してください";$('nameInput').focus();return}
   if(!dbReady()){$("joinStatus").textContent="Firebase接続中です。少し待ってください。";return}
-  try {
-    const ok=mode==="play"?await registerPlayer():await registerSpectator();
-    if(!ok) $("joinStatus").textContent="参加処理に失敗しました。もう一度押してください。";
-  } catch(e) {
-    console.error("参加処理エラー",e);
-    $("joinStatus").textContent=`参加エラー（${e.code||e.message||"unknown"}）`;
-  }
+  try{const ok=await registerPlayer();if(!ok)$('joinStatus').textContent="参加処理に失敗しました。もう一度押してください。";}catch(e){console.error("参加処理エラー",e);$('joinStatus').textContent=`参加エラー（${e.code||e.message||"unknown"}）`;}
 };
-$("startBtn").onclick=async()=>{if(mode!=="play")return;if(!localPlayer||localPlayer.mode!=="play"){const ok=await registerPlayer();if(!ok)return;}if(localPlayer?.mode==="play")await startGameOnline();};
-document.querySelectorAll(".modeBtn").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".modeBtn").forEach(x=>x.classList.remove("active","dark"));b.classList.add("active");mode=b.dataset.mode;$("startBtn").textContent=mode==="watch"?"観覧を開始":"ゲーム開始！";if(dbReady()&&$("nameInput").value.trim()){if(mode==="play")await registerPlayer();else await registerSpectator();}}));
-$("nameInput").addEventListener("keydown",e=>{if(e.key==="Enter")$("joinBtn").click()});
-$("returnGameBtn")?.addEventListener("click",()=>{clearTimeout(resultAdvanceTimer);$("result").style.display="none";$("startScreen").style.display="none";$("status").textContent="ゲーム終了"});
-document.querySelectorAll(".roundBtn").forEach(b=>b.addEventListener("click",()=>selectRounds(Number(b.dataset.round))));selectRounds(3);
+$('nameInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('joinBtn').click()});
+$('saveRoundBtn')?.addEventListener('click',saveRoundsAndStart);
+$('returnGameBtn')?.addEventListener('click',()=>{clearTimeout(resultAdvanceTimer);$('result').style.display='none';$('status').textContent='ゲーム終了';});
+document.querySelectorAll('.roundBtn').forEach(b=>b.addEventListener('click',()=>selectRounds(Number(b.dataset.round))));selectRounds(3);
 $("forceNextBtn")?.addEventListener("click",()=>{
   if(confirm("現在のラウンドを強制的に結果発表へ進めます。よろしいですか？"))forceNextRound();
 });
@@ -744,18 +735,14 @@ $("restartGameBtn")?.addEventListener("click",()=>{
   if(confirm("ゲームを最初からやり直します。現在の進行状況はリセットされます。よろしいですか？"))restartWholeGame();
 });
 $("clearMyakBtn")?.addEventListener("click",clearAllMyak);
-$("backWaitingBtn")?.addEventListener("click",()=>{
-  if(confirm("待機画面に戻ります。現在のゲーム進行は終了します。よろしいですか？"))returnToWaiting();
-});
 $("againBtn").onclick=()=>{};
-$("watchSelect")?.addEventListener("change",e=>{selectedWatchUid=e.target.value;const p=participants[selectedWatchUid];if(p?.board){decodeBoard(p.board);render()}});
 setupChat();
 window.addEventListener("firebase-ready",()=>{subscribeFirebase();});
 window.addEventListener("firebase-error",e=>{
   const err=e.detail||{};
   console.error("Firebase connection error",err);
   const code=err.code||"unknown";
-  $("entryPlayers").textContent=`Firebase接続エラー（${code}）。ページを再読み込みしてください。`;
+  $("joinStatus").textContent=`Firebase接続エラー（${code}）。ページを再読み込みしてください。`;
 });
 </script>
 </body>
