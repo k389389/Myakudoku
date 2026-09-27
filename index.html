@@ -412,7 +412,7 @@ let name="",mode="play",board=[],solution=[],placed=[],flags=[],regions=[];
 let started=false,startAt=0,raf=0,gameOver=false,penaltyPoints=0;
 let totalRounds=3,currentRound=1,roundFinished=false;
 let participants={}, chatSeen={}, selectedWatchUid=null, countdownTimer=null, firebaseUnsubs=[];
-let localPlayer=null, localStartAt=0, autoAdvanceTimer=null, roundFinalizeInProgress=false;
+let localPlayer=null, hasJoined=false, localStartAt=0, autoAdvanceTimer=null, roundFinalizeInProgress=false;
 let audioCtx=null, lastGamePhase=null, lastResultSoundPhase=null, resultAdvanceTimer=null;
 let localStartRound=0;
 
@@ -526,6 +526,7 @@ async function registerPlayer(){
   await set(playerRef,p);
   await onDisconnect(playerRef).remove();
   localPlayer={...p,host:false};
+  hasJoined=true;
   $("joinStatus").textContent="🟢 プレイヤーとして参加中";
   $("startScreen").style.display="none";
   return true;
@@ -547,6 +548,11 @@ function handleGameState(g){
   currentRound=g?.round||1;
   const phase=g?.phase||"READY";
   lastGamePhase=phase;
+  if(!hasJoined){
+    started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
+    $("startScreen").style.display="flex";
+    return;
+  }
   if(g?.puzzle?.solution&&g?.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}
   if(phase==="READY"){
     clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
@@ -717,7 +723,7 @@ async function returnToWaiting(){
   $("result").style.display="none";$("status").textContent="ラウンドを選んで保存してください";
 }
 async function forceNextRound(){if(!dbReady()||!started||roundFinished)return;await finalizeRound(true)}
-function subscribeFirebase(){if(!dbReady())return;firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/players`),snap=>{participants=snap.val()||{};renderPlayers();renderEntryPlayers();const me=participants[uid()];if(me)localPlayer=me;watchClearCount()}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/game`),snap=>{const g=snap.val();handleGameState(g);if(g?.phase==="COUNTDOWN")promoteAndStartPlaying(g)}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/chat`),snap=>{const data=snap.val()||{};Object.entries(data).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).slice(-50).forEach(([id,msg])=>{if(chatSeen[id])return;chatSeen[id]=true;renderEntryChat(msg);renderFloatChat(msg)})}));}
+function subscribeFirebase(){if(!dbReady())return;firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/players`),snap=>{participants=snap.val()||{};renderPlayers();renderEntryPlayers();const me=participants[uid()];if(me&&hasJoined)localPlayer=me;watchClearCount()}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/game`),snap=>{const g=snap.val();handleGameState(g);if(g?.phase==="COUNTDOWN")promoteAndStartPlaying(g)}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/chat`),snap=>{const data=snap.val()||{};Object.entries(data).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).slice(-50).forEach(([id,msg])=>{if(chatSeen[id])return;chatSeen[id]=true;renderEntryChat(msg);renderFloatChat(msg)})}));}
 
 $("joinBtn").onclick=async()=>{
   if(!$('nameInput').value.trim()){$("joinStatus").textContent="⚠️ 名前を入力してから参加してください";$('nameInput').focus();return}
@@ -737,6 +743,7 @@ $("restartGameBtn")?.addEventListener("click",()=>{
 $("clearMyakBtn")?.addEventListener("click",clearAllMyak);
 $("againBtn").onclick=()=>{};
 setupChat();
+$("startScreen").style.display="flex";
 window.addEventListener("firebase-ready",()=>{subscribeFirebase();});
 window.addEventListener("firebase-error",e=>{
   const err=e.detail||{};
