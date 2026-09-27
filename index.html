@@ -319,7 +319,6 @@ button{cursor:pointer}
   <button id="forceNextBtn" class="btn dark">⏭ 誰かが止まったとき：強制的にラウンド結果へ</button>
   <div class="bottomActions">
     <button id="restartGameBtn" class="btn gold">🔄 もう一度始める</button>
-    <button id="backWaitingBtn" class="btn dark">🏠 待機画面に戻る</button>
   </div>
 </div>
 
@@ -413,7 +412,7 @@ let name="",mode="play",board=[],solution=[],placed=[],flags=[],regions=[];
 let started=false,startAt=0,raf=0,gameOver=false,penaltyPoints=0;
 let totalRounds=3,currentRound=1,roundFinished=false;
 let participants={}, chatSeen={}, selectedWatchUid=null, countdownTimer=null, firebaseUnsubs=[];
-let localPlayer=null, localStartAt=0, autoAdvanceTimer=null, roundFinalizeInProgress=false;
+let localPlayer=null, hasJoined=false, localStartAt=0, autoAdvanceTimer=null, roundFinalizeInProgress=false;
 let audioCtx=null, lastGamePhase=null, lastResultSoundPhase=null, resultAdvanceTimer=null;
 let localStartRound=0;
 
@@ -500,7 +499,7 @@ async function submitClear(){
   await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"CLEAR",clearAt:serverTimestamp(),clearRound:currentRound,timeMs:elapsed,score,board:encodeBoard()}).catch(()=>{});
   started=false;cancelAnimationFrame(raf);$('status').textContent="クリア！";
 }
-function renderPlayers(){const arr=Object.values(participants).filter(Boolean);const box=$("players");if(!box)return;box.innerHTML="";arr.sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(p=>{const row=document.createElement("div");row.className="player";const left=document.createElement("span");left.innerHTML=`<span class="dot" style="background:${p.color||"#35c9ff"}"></span>${escapeHtml(p.name)}`;const right=document.createElement("span");right.className="small";right.textContent=p.status==="CLEAR"?`CLEAR! ${format(p.timeMs||0)} / ${p.score||0}点`:p.status==="PLAYING"?"プレイ中":"参加中";row.append(left,right);box.appendChild(row)})}
+function renderPlayers(){const arr=Object.values(participants).filter(p=>p&&String(p.name||"").trim());const box=$("players");if(!box)return;box.innerHTML="";arr.filter(p=>p.mode!=="watch"&&String(p.name||"").trim()).sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(p=>{const row=document.createElement("div");row.className="player";const left=document.createElement("span");left.innerHTML=`<span class="dot" style="background:${p.color||"#35c9ff"}"></span>${escapeHtml(p.name)}`;const right=document.createElement("span");right.className="small";right.textContent=p.status==="CLEAR"?`CLEAR! ${format(p.timeMs||0)} / ${p.score||0}点`:p.status==="PLAYING"?"プレイ中":"参加中";row.append(left,right);box.appendChild(row)})}
 function renderEntryPlayers(){return}
 function renderEntryChat(msg){const log=$("entryChatLog");if(!log)return;const line=document.createElement("div");line.style.margin="3px 0";line.innerHTML=`<b>${escapeHtml(msg.name)}：</b>${escapeHtml(msg.text)}`;log.appendChild(line);log.scrollTop=log.scrollHeight}
 function renderFloatChat(msg){const wrap=$("chatFloat");if(!wrap)return;const bubble=document.createElement("div");bubble.className="chatBubble";bubble.textContent=`${msg.name}：${msg.text}`;bubble.style.left=(10+Math.floor(Math.random()*35))+"px";wrap.appendChild(bubble);setTimeout(()=>bubble.remove(),4100)}
@@ -523,32 +522,14 @@ async function registerPlayer(){
   if(!name){$("joinStatus").textContent="⚠️ 名前を入力してから参加してください";$("nameInput").focus();return false;}
   const playerRef=ref(db(),`rooms/${ROOM_ID}/players/${uid()}`);
   const existing=participants[uid()];
-  const gameSnap=await get(ref(db(),`rooms/${ROOM_ID}/game`));
-  const currentGame=gameSnap.val()||{};
-  const inProgress=currentGame.phase==="COUNTDOWN"||currentGame.phase==="PLAYING";
-  const p={uid:uid(),name,mode:"play",status:inProgress?"PLAYING":(existing?.status||"WAITING"),color:existing?.color||"#35c9ff",host:false,roundPoints:existing?.roundPoints||0,joinedAt:existing?.joinedAt||serverTimestamp()};
+  const p={uid:uid(),name,mode:"play",status:(existing?.status||"WAITING"),color:existing?.color||"#35c9ff",host:false,roundPoints:existing?.roundPoints||0,joinedAt:existing?.joinedAt||serverTimestamp()};
   await set(playerRef,p);
-  if(inProgress && currentGame.phase==="PLAYING" && currentGame.roundStartAt){
-    const elapsed=Math.max(0,Date.now()-Number(currentGame.roundStartAt));
-    const score=Math.max(0,500-Math.floor(elapsed/1000));
-    await update(playerRef,{timeMs:elapsed,score,clearAt:null,clearRound:null});
-  }
   await onDisconnect(playerRef).remove();
   localPlayer={...p,host:false};
+  hasJoined=true;
+  try{localStorage.setItem("myakudoku_player_name",name);}catch(e){}
   $("joinStatus").textContent="🟢 プレイヤーとして参加中";
   $("startScreen").style.display="none";
-  return true;
-}
-async function registerSpectator(){return false;}
-async function registerSpectator(){
-  try{sessionStorage.removeItem("expo_waiting")}catch(e){}
-  if(!dbReady()) return false;
-  name=$("nameInput").value.trim();
-  if(!name){$("joinStatus").textContent="⚠️ 名前を入力してから観覧してください";$("nameInput").focus();return false;}
-  const playerRef=ref(db(),`rooms/${ROOM_ID}/players/${uid()}`);
-  const p={uid:uid(),name,mode:"watch",status:"WATCHING",color:"#9aa7b5",host:false,roundPoints:0,joinedAt:serverTimestamp()};
-  await set(playerRef,p); await onDisconnect(playerRef).remove(); localPlayer=p;
-  $("joinStatus").textContent="👀 観覧モードで参加中";
   return true;
 }
 function startCountdown(){
@@ -568,10 +549,16 @@ function handleGameState(g){
   currentRound=g?.round||1;
   const phase=g?.phase||"READY";
   lastGamePhase=phase;
+  if(!hasJoined){
+    started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
+    $("startScreen").style.display="flex";
+    return;
+  }
   if(g?.puzzle?.solution&&g?.puzzle?.regions){solution=g.puzzle.solution;regions=g.puzzle.regions}
   if(phase==="READY"){
     clearTimeout(resultAdvanceTimer);started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
-    $("status").textContent="ラウンドを選んで保存してください";
+    $("status").textContent="スタート待ち：ラウンドを選んで保存してください";
+    $("startScreen").style.display="none";
     return;
   }
   if(phase==="COUNTDOWN"){
@@ -666,10 +653,12 @@ async function saveRoundsAndStart(){
   const gameRef=ref(db(),`rooms/${ROOM_ID}/game`);
   try{
     const tx=await runTransaction(gameRef,current=>{
+      const phase=current?.phase||"READY";
+      if(phase==="COUNTDOWN"||phase==="PLAYING"||phase==="ROUND_RESULT")return;
       const sol=makeSolution(),reg=makeRegions(sol);
       return {phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,resultAt:null,forced:false};
     });
-    if(!tx.committed){if(status)status.textContent="⚠️ ゲーム開始に失敗しました。もう一度保存してください";return;}
+    if(!tx.committed){if(status)status.textContent="⚠️ すでにゲームが進行中です";return;}
     const updates={};
     const players=Object.values(participants).filter(p=>p?.mode==="play");
     for(const p of players){
@@ -736,7 +725,7 @@ async function returnToWaiting(){
   $("result").style.display="none";$("status").textContent="ラウンドを選んで保存してください";
 }
 async function forceNextRound(){if(!dbReady()||!started||roundFinished)return;await finalizeRound(true)}
-function subscribeFirebase(){if(!dbReady())return;firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/players`),snap=>{participants=snap.val()||{};renderPlayers();renderEntryPlayers();const me=participants[uid()];if(me)localPlayer=me;watchClearCount()}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/game`),snap=>{const g=snap.val();handleGameState(g);if(g?.phase==="COUNTDOWN")promoteAndStartPlaying(g)}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/chat`),snap=>{const data=snap.val()||{};Object.entries(data).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).slice(-50).forEach(([id,msg])=>{if(chatSeen[id])return;chatSeen[id]=true;renderEntryChat(msg);renderFloatChat(msg)})}));}
+function subscribeFirebase(){if(!dbReady())return;firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/players`),snap=>{participants=snap.val()||{};Object.entries(participants).forEach(([pid,p])=>{if(!String(p?.name||"").trim()){remove(ref(db(),`rooms/${ROOM_ID}/players/${pid}`)).catch(()=>{});}});renderPlayers();renderEntryPlayers();const me=participants[uid()];if(me&&hasJoined)localPlayer=me;watchClearCount()}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/game`),snap=>{const g=snap.val();handleGameState(g);if(g?.phase==="COUNTDOWN")promoteAndStartPlaying(g)}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/chat`),snap=>{const data=snap.val()||{};Object.entries(data).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).slice(-50).forEach(([id,msg])=>{if(chatSeen[id])return;chatSeen[id]=true;renderEntryChat(msg);renderFloatChat(msg)})}));}
 
 $("joinBtn").onclick=async()=>{
   if(!$('nameInput').value.trim()){$("joinStatus").textContent="⚠️ 名前を入力してから参加してください";$('nameInput').focus();return}
@@ -754,15 +743,25 @@ $("restartGameBtn")?.addEventListener("click",()=>{
   if(confirm("ゲームを最初からやり直します。現在の進行状況はリセットされます。よろしいですか？"))restartWholeGame();
 });
 $("clearMyakBtn")?.addEventListener("click",clearAllMyak);
-$("backWaitingBtn")?.remove();
 $("againBtn").onclick=()=>{};
 setupChat();
-window.addEventListener("firebase-ready",()=>{subscribeFirebase();});
+$("startScreen").style.display="flex";
+window.addEventListener("firebase-ready",async()=>{
+  try{
+    const savedName=String(localStorage.getItem("myakudoku_player_name")||"").trim();
+    if(savedName){
+      $("nameInput").value=savedName;
+      const ok=await registerPlayer();
+      if(ok){$("joinStatus").textContent="🟢 保存した名前で参加中";}
+    }
+  }catch(e){console.error("保存名の復元エラー",e)}
+  subscribeFirebase();
+});
 window.addEventListener("firebase-error",e=>{
   const err=e.detail||{};
   console.error("Firebase connection error",err);
   const code=err.code||"unknown";
-  $("entryPlayers").textContent=`Firebase接続エラー（${code}）。ページを再読み込みしてください。`;
+  $("joinStatus").textContent=`Firebase接続エラー（${code}）。ページを再読み込みしてください。`;
 });
 </script>
 </body>
