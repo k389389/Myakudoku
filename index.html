@@ -333,7 +333,7 @@ button{cursor:pointer}
       import("https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js")
     ]);
     const { initializeApp } = appMod;
-    const { getDatabase, ref, set, update, push, onValue, onDisconnect, serverTimestamp, get, runTransaction } = dbMod;
+    const { getDatabase, ref, set, update, push, onValue, onDisconnect, serverTimestamp, get, runTransaction, remove } = dbMod;
     const { getAuth, signInAnonymously, onAuthStateChanged } = authMod;
 
     const firebaseConfig = {
@@ -349,7 +349,7 @@ button{cursor:pointer}
     const app=initializeApp(firebaseConfig);
     const db=getDatabase(app);
     const auth=getAuth(app);
-    window.myakudokuFirebase={app,db,auth,ref,set,update,push,onValue,onDisconnect,serverTimestamp,get,runTransaction};
+    window.myakudokuFirebase={app,db,auth,ref,set,update,push,onValue,onDisconnect,serverTimestamp,get,runTransaction,remove};
 
     let firebaseReadyFired=false;
     const firebaseReady=()=>{
@@ -405,6 +405,7 @@ const onDisconnect=(...args)=>window.myakudokuFirebase.onDisconnect(...args);
 const serverTimestamp=(...args)=>window.myakudokuFirebase.serverTimestamp(...args);
 const get=(...args)=>window.myakudokuFirebase.get(...args);
 const runTransaction=(...args)=>window.myakudokuFirebase.runTransaction(...args);
+const remove=(...args)=>window.myakudokuFirebase.remove(...args);
 
 const N=10;
 const palette=["#fff477","#6cf06c","#69e5d0","#69d7ef","#6d8ff0","#a06df0","#d76df0","#ff6fb4","#ffd080","#ff7777"];
@@ -621,7 +622,7 @@ async function finalizeRound(force=false){
       result[p.uid]={name:p.name,rank:i+1,points:pts,score:Number(p.score||0),timeMs:p.timeMs||0};
       totals[p.uid]={name:p.name,points:(p.roundPoints||0)+pts};
     });
-    autoAdvance=false;
+    autoAdvance=currentRound<totalRounds;
     const updates={};
     updates[`rooms/${ROOM_ID}/game/phase`]=currentRound>=totalRounds?"FINAL":"ROUND_RESULT";
     updates[`rooms/${ROOM_ID}/game/result`]=result;
@@ -633,7 +634,7 @@ async function finalizeRound(force=false){
     roundFinished=true;
     if(autoAdvance){
       clearTimeout(autoAdvanceTimer);
-      autoAdvanceTimer=setTimeout(async()=>{roundFinalizeInProgress=false;await startNextRoundOnline();},1200);
+      autoAdvanceTimer=setTimeout(async()=>{roundFinalizeInProgress=false;await startNextRoundOnline();},5000);
     }
   }catch(e){console.error("round finalize error",e);roundFinalizeInProgress=false;}
   if(!autoAdvance)roundFinalizeInProgress=false;
@@ -643,8 +644,9 @@ async function watchClearCount(){
   if(!dbReady()||roundFinished||roundFinalizeInProgress)return;
   const play=Object.values(participants).filter(p=>p.mode==="play");
   const cleared=play.filter(p=>p.status==="CLEAR"&&Number(p.clearRound||0)===Number(currentRound)).length;
-  const need=play.length<=2?1:3;
-  if(play.length>0&&cleared>=Math.min(need,play.length))await finalizeRound(false);
+  // 1人なら1人、2人なら2人、3人以上なら3人クリアでラウンド終了
+  const need=Math.min(3,play.length);
+  if(play.length>0&&cleared>=need)await finalizeRound(false);
 }
 async function saveRoundsAndStart(){
   if(!dbReady())return;
@@ -724,7 +726,13 @@ async function returnToWaiting(){
   await update(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`),{status:"WAITING",board:".".repeat(100),timeMs:0,score:0,clearAt:null,clearRound:null}).catch(()=>{});
   $("result").style.display="none";$("status").textContent="ラウンドを選んで保存してください";
 }
-async function forceNextRound(){if(!dbReady()||!started||roundFinished)return;await finalizeRound(true)}
+async function forceNextRound(){
+  if(!dbReady()||roundFinished)return;
+  const gameSnap=await get(ref(db(),`rooms/${ROOM_ID}/game`)).catch(()=>null);
+  const phase=gameSnap?.val()?.phase;
+  if(phase!=="PLAYING"&&phase!=="COUNTDOWN")return;
+  await finalizeRound(true);
+}
 function subscribeFirebase(){if(!dbReady())return;firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/players`),snap=>{participants=snap.val()||{};Object.entries(participants).forEach(([pid,p])=>{if(!String(p?.name||"").trim()){remove(ref(db(),`rooms/${ROOM_ID}/players/${pid}`)).catch(()=>{});}});renderPlayers();renderEntryPlayers();const me=participants[uid()];if(me&&hasJoined)localPlayer=me;watchClearCount()}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/game`),snap=>{const g=snap.val();handleGameState(g);if(g?.phase==="COUNTDOWN")promoteAndStartPlaying(g)}));firebaseUnsubs.push(onValue(ref(db(),`rooms/${ROOM_ID}/chat`),snap=>{const data=snap.val()||{};Object.entries(data).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).slice(-50).forEach(([id,msg])=>{if(chatSeen[id])return;chatSeen[id]=true;renderEntryChat(msg);renderFloatChat(msg)})}));}
 
 $("joinBtn").onclick=async()=>{
