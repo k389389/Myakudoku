@@ -424,7 +424,29 @@ function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;",
 function format(ms){const s=Math.floor(Math.max(0,ms)/1000);return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`}
 function validSolution(p){for(let r=0;r<N;r++)for(let c=r+1;c<N;c++)if(p[r]===p[c])return false;for(let r=0;r<N-1;r++)if(Math.abs(p[r]-p[r+1])===1)return false;return true}
 function makeSolution(){let p=[...Array(N).keys()];for(let i=0;i<50000;i++){shuffle(p);if(validSolution(p))return p.slice()}return [0,2,4,6,8,1,3,5,7,9]}
+const PRESET_BOARDS=[
+  ["0888888888","0188822288","0138888888","8138888888","8834858888","8884858688","8884858688","8888888699","8877788889","8888888889"],
+  ["0000000000","1111111220","3111114420","3333114470","5566111770","6666911770","6666911770","6689911770","6888891770","6888891000"],
+  ["0000000000","1222222220","1234444440","1234567740","1234569840","1234569880","1234569550","1234555550","1233333330","1000000000"],
+  ["0111111111","0122233331","0124242221","0124455131","0120445111","0120645555","2200677755","2000679955","2006888955","0005555555"],
+  ["0111111111","0222222221","0253333341","0256667341","0256977341","0259978341","0259888341","0255555541","0244444441","0000000001"],
+  ["0000001123","0033333312","0366663322","0346463522","4346465522","4344667522","4499677522","4499666722","9999666622","2222222222"],
+  ["2277777777","2277888877","2666638777","2006387477","0066311477","0066317744","0066337554","9006637574","9999667779","9999999999"],
+  ["0000000000","0004000443","6666777703","6956171703","6696177703","2666777003","2225555503","2222588503","2222585503","2222555000"],
+  ["0000000000","0122003440","0125033444","0025666644","0025574444","0022574444","0228999994","0288888894","0222999994","0000004444"],
+  ["2211999999","5221300009","5221044066","5333000406","5300000006","5806666666","5806777777","5806678888","5888888888","5555558888"]
+];
+
 function makeRegions(sol){const reg=Array.from({length:N},()=>Array(N).fill(-1));const q=[];for(let i=0;i<N;i++){reg[i][sol[i]]=i;q.push([i,sol[i]])}shuffle(q);let h=0;const dirs=[[1,0],[-1,0],[0,1],[0,-1]];while(h<q.length){const [r,c]=q[h++];for(const [dr,dc] of shuffle(dirs.slice())){const nr=r+dr,nc=c+dc;if(nr>=0&&nr<N&&nc>=0&&nc<N&&reg[nr][nc]===-1){reg[nr][nc]=reg[r][c];q.push([nr,nc])}}}return reg}
+function makeSelectedPuzzle(){
+  if(Math.random()<0.5){
+    const rows=PRESET_BOARDS[Math.floor(Math.random()*PRESET_BOARDS.length)];
+    const reg=rows.map(row=>row.split("").map(Number));
+    return [makeSolution(),reg];
+  }
+  const sol=makeSolution();
+  return [sol,makeRegions(sol)];
+}
 function newPuzzle(sol=solution,reg=regions){solution=sol.slice();regions=reg.map(x=>x.slice());board=Array.from({length:N},()=>Array(N).fill(0));placed=Array.from({length:N},()=>Array(N).fill(false));flags=Array.from({length:N},()=>Array(N).fill(false));render()}
 function pieceFilter(region){const f=["hue-rotate(45deg) saturate(1.25)","hue-rotate(105deg) saturate(1.25)","hue-rotate(155deg) saturate(1.15)","hue-rotate(195deg) saturate(1.2)","hue-rotate(225deg) saturate(1.15)","hue-rotate(265deg) saturate(1.2)","hue-rotate(300deg) saturate(1.2)","hue-rotate(335deg) saturate(1.2)","hue-rotate(15deg) saturate(1.2)","hue-rotate(355deg) saturate(1.2)"];return f[region%f.length]}
 function render(){boardEl.innerHTML="";for(let r=0;r<N;r++)for(let c=0;c<N;c++){const el=document.createElement("div");el.className="cell";el.style.background=palette[regions[r][c]];el.dataset.r=r;el.dataset.c=c;if(placed[r][c]){const img=new Image();img.className="icon";img.src=MYAK;img.style.filter=pieceFilter(regions[r][c]);el.appendChild(img)}else if(flags[r][c]){const img=new Image();img.className="flag";img.src=FLAG;img.style.filter=pieceFilter(regions[r][c]);el.appendChild(img)}el.addEventListener("click",()=>tapCell(r,c,el));boardEl.appendChild(el)}}
@@ -666,7 +688,7 @@ async function saveRoundsAndStart(){
     const tx=await runTransaction(gameRef,current=>{
       const phase=current?.phase||"READY";
       if(phase==="COUNTDOWN"||phase==="PLAYING"||phase==="ROUND_RESULT")return;
-      const sol=makeSolution(),reg=makeRegions(sol);
+      const [sol,reg]=makeSelectedPuzzle();
       return {phase:"COUNTDOWN",round:1,totalRounds,puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,result:null,totals:null,resultAt:null,forced:false};
     });
     if(!tx.committed){if(status)status.textContent="⚠️ すでにゲームが進行中です";return;}
@@ -693,7 +715,7 @@ async function startNextRoundOnline(){
       if(!current || current.phase!=="ROUND_RESULT")return;
       const next=(current.round||1)+1;
       if(next>(current.totalRounds||totalRounds))return;
-      const sol=makeSolution(),reg=makeRegions(sol);
+      const [sol,reg]=makeSelectedPuzzle();
       return {phase:"COUNTDOWN",round:next,totalRounds:current.totalRounds||totalRounds,
         puzzle:{solution:sol,regions:reg},countdownAt:serverTimestamp(),roundStartAt:null,
         result:null,totals:null,resultAt:null,forced:false};
@@ -717,7 +739,7 @@ async function startNextRoundOnline(){
 async function restartWholeGame(){
   if(!dbReady()||mode!=="play")return;
   clearTimeout(autoAdvanceTimer);roundFinalizeInProgress=false;
-  const sol=makeSolution(),reg=makeRegions(sol),updates={};
+  const [sol,reg]=makeSelectedPuzzle(),updates={};
   for(const p of Object.values(participants).filter(p=>p.mode==="play")){
     updates[`rooms/${ROOM_ID}/players/${p.uid}/status`]="WAITING";
     updates[`rooms/${ROOM_ID}/players/${p.uid}/timeMs`]=0;
