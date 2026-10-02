@@ -559,17 +559,21 @@ async function registerPlayer(){
   $("startScreen").style.display="none";
   return true;
 }
-function startCountdown(){
+function startCountdown(countdownAt){
   penaltyPoints=0;$("time").textContent="00:00";$("score").textContent="500";
-  const cd=$("countdown");cd.style.display="flex";const start=Date.now();let lastN=null;
+  const cd=$("countdown");cd.style.display="flex";const start=Number(countdownAt)||Date.now();let lastN=null;
   clearInterval(countdownTimer);
   countdownTimer=setInterval(()=>{
-    const d=Date.now()-start,n=3-Math.floor(d/1000);
+    const d=Math.max(0,Date.now()-start),n=3-Math.floor(d/1000);
     if(n>0){cd.textContent=n;if(n!==lastN){playCountdownSound(n);lastN=n}}
     else{cd.textContent="START!";if(lastN!==0){playCountdownSound(0);lastN=0}
-      if(d>3400){clearInterval(countdownTimer);cd.style.display="none";started=true;localStartAt=Date.now();$("status").textContent=`ROUND ${currentRound}`;tick()}
+      if(d>3400){clearInterval(countdownTimer);cd.style.display="none";started=true;localStartAt=Date.now();updateRoundStatus();tick()}
     }
   },100)
+}
+function updateRoundStatus(){
+  const el=$("status");
+  if(el)el.textContent=`ROUND ${currentRound}　${totalRounds}Rで終了！`;
 }
 function handleGameState(g){
   totalRounds=g?.totalRounds||totalRounds||3;
@@ -591,8 +595,8 @@ function handleGameState(g){
   if(phase==="COUNTDOWN"){
     clearTimeout(resultAdvanceTimer);penaltyPoints=0;localStartAt=0;localStartRound=0;
     $("time").textContent="00:00";$("score").textContent="500";newPuzzle(solution,regions);
-    started=false;roundFinished=false;gameOver=false;$("status").textContent=`ROUND ${currentRound}`;
-    $("startScreen").style.display="none";$("result").style.display="none";startCountdown();return;
+    started=false;roundFinished=false;gameOver=false;updateRoundStatus();
+    $("startScreen").style.display="none";$("result").style.display="none";startCountdown(g.countdownAt);return;
   }
   if(phase==="PLAYING"){
     clearTimeout(resultAdvanceTimer);$("startScreen").style.display="none";started=true;roundFinished=false;gameOver=false;
@@ -600,7 +604,7 @@ function handleGameState(g){
       localStartAt=Number(g.roundStartAt);localStartRound=currentRound;penaltyPoints=0;
       newPuzzle(solution,regions);
     }
-    $("status").textContent=`ROUND ${currentRound}`;tick();return;
+    updateRoundStatus();tick();return;
   }
   if(phase==="ROUND_RESULT"){
     started=false;roundFinished=true;gameOver=false;cancelAnimationFrame(raf);showRoundResult(g.result||{},g.totals||{},currentRound);scheduleNextRound(g);return;
