@@ -320,6 +320,7 @@ button{cursor:pointer}
   <div class="bottomActions">
     <button id="restartGameBtn" class="btn gold">🔄 もう一度始める</button>
   </div>
+  <button id="exitGameBtn" class="btn red" style="width:100%;margin-top:12px">退出する</button>
 </div>
 
 <script type="module">
@@ -803,6 +804,21 @@ $("restartGameBtn")?.addEventListener("click",()=>{
   if(confirm("ゲームを最初からやり直します。現在の進行状況はリセットされます。よろしいですか？"))restartWholeGame();
 });
 $("clearMyakBtn")?.addEventListener("click",clearAllMyak);
+$("exitGameBtn")?.addEventListener("click",async()=>{
+  if(!hasJoined)return;
+  if(!confirm("退出して名前入力画面に戻りますか？"))return;
+  try{
+    if(dbReady())await window.myakudokuFirebase.remove(ref(db(),`rooms/${ROOM_ID}/players/${uid()}`));
+  }catch(e){console.error("退出処理エラー",e)}
+  try{localStorage.removeItem("myakudoku_player_name")}catch(e){}
+  hasJoined=false;localPlayer=null;name="";
+  started=false;roundFinished=false;gameOver=false;cancelAnimationFrame(raf);
+  clearInterval(countdownTimer);clearTimeout(resultAdvanceTimer);
+  $("countdown").style.display="none";$("result").style.display="none";
+  $("nameInput").value="";
+  $("joinStatus").textContent="名前を入力して参加してください";
+  $("startScreen").style.display="flex";
+});
 $("againBtn").onclick=()=>{};
 setupChat();
 $("startScreen").style.display="flex";
